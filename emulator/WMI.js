@@ -75,13 +75,10 @@ const tables = {
             "classpath": "\\USER-PC\root\cimv2:Win32_NetworkAdapterConfiguration",
             "qualifiers": ["dynamic", "Locale", "provider", "UUID"],
         }],
-	win32_computersystem: [{
-                domain: "corp.local",
-                manufacturer: "Dell Inc.",
-                model: "Precision Tower 7910",
-                name: "778asdfCORP",
-                primaryownername: "Red",
-                totalphysicalmemory: 68636221440,
+	win32_operatingsystem: [{
+                version: "10.0.17134",
+                caption: "Microsoft Windows 10 Enterprise",
+                locale: 0409,
                 currenttimezone: timezone
         }],
 	win32_process: processes,
