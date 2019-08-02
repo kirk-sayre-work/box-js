@@ -4,11 +4,21 @@ const path = require("path");
 
 const diskSize = Math.floor(Math.random() * 1E11);
 const freeSpace = Math.floor(Math.random() * diskSize);
+const timezone = -300
 
 // Note: all fields MUST be in lowercase!
 const processes = JSON.parse(fs.readFileSync(path.join(__dirname, "processes.json"), "utf8"));
 const tables = {
 	antivirusproduct: [],
+	win32_computersystem: [{
+                domain: "corp.local",
+                manufacturer: "Dell Inc.",
+                model: "Precision Tower 7910",
+                name: "778asdfCORP",
+                primaryownername: "Red",
+                totalphysicalmemory: 68636221440,
+                currenttimezone: timezone
+        }],
 	win32_computersystemproduct: [],
 	win32_logicaldisk: [{ // dirty patch by @ALange
 		deviceid: "C:",
@@ -64,12 +74,16 @@ const tables = {
             "options": "System.Management.ObjectGetOptions",
             "classpath": "\\USER-PC\root\cimv2:Win32_NetworkAdapterConfiguration",
             "qualifiers": ["dynamic", "Locale", "provider", "UUID"],
-        }
-        ],
-	win32_operatingsystem: [{
-		version: "5.3",
-		caption: "Windows XP"
-	}],
+        }],
+	win32_computersystem: [{
+                domain: "corp.local",
+                manufacturer: "Dell Inc.",
+                model: "Precision Tower 7910",
+                name: "778asdfCORP",
+                primaryownername: "Red",
+                totalphysicalmemory: 68636221440,
+                currenttimezone: timezone
+        }],
 	win32_process: processes,
 };
 
