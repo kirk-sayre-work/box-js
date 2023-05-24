@@ -191,6 +191,11 @@
             "name": "ignore-wscript-quit",
             "type": "Boolean",
             "description": "Ignore calls to WSCript.Quit() and continue execution."
+        },
+        {
+            "name": "decode-uri-component-as-ioc",
+            "type": "Boolean",
+            "description": "Log Unique decodeURIComponent results as IOC's"
         }
     ],
     "export": [

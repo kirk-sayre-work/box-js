@@ -798,6 +798,15 @@ const sandbox = {
     _typeof: (x) => x.typeof ? x.typeof : typeof x,
     WScript: wscript_proxy,
     WSH: wscript_proxy,
+    decodeURIComponent: (x) => {
+       out = decodeURIComponent(x)
+       if (argv["decode-uri-component-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("decodeURIComponent",{out}, `decodeURIComponent Output`);
+          }
+	}
+        return out
+    },
     self: {},
     require
 };
