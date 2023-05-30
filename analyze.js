@@ -225,7 +225,8 @@ function extractCode(code) {
 
     // See if we can pull code out from conditional comments.
     // /*@if(@_jscript_version >= 4) ... @else @*/
-    const commentPat = /\/\*@if\s*\([^\)]+\)(.+?)@else\s*@\s*\*\//
+    // /*@if(1) ... @end@*/
+    const commentPat = /\/\*@if\s*\([^\)]+\)(.+?)@(else|end)\s*@\s*\*\//
     const codeMatch = code.match(commentPat);
     if (!codeMatch) return code;
     var r = codeMatch[1];
@@ -361,6 +362,8 @@ If you run into unexpected results, try uncommenting lines that look like
                     },
                 });
             } catch (e) {
+                //console.log("!!!! CODE !!!!");
+                //console.log(code);
                 lib.error("Couldn't parse with Acorn:");
                 lib.error(e);
                 lib.error("");
