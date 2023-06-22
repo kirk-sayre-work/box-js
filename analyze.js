@@ -16,7 +16,8 @@ const { DOMParser } = require('xmldom');
 const filename = process.argv[2];
 
 // JScriptMemberFunctionStatement plugin registration
-require("./patches/prototype-plugin.js")(acorn);
+// Plugin system is now different in Acorn 8.*, so commenting out.
+//require("./patches/prototype-plugin.js")(acorn);
 
 lib.debug("Analysis launched: " + JSON.stringify(process.argv));
 lib.verbose("Box-js version: " + require("./package.json").version);
@@ -100,13 +101,17 @@ function hideStrs(s) {
 
         // Start /* */ comment?
         var currChar = s[i];
-        inComment = inComment || ((prevChar == "/") && (currChar == "*") && !inStrDouble && !inStrSingle);
+	var oldInComment = inComment;
+        inComment = inComment || ((prevChar == "/") && (currChar == "*") && !inStrDouble && !inStrSingle && !inCommentSingle);
         
         // In /* */ comment?
         if (inComment) {
 
-            // Save comment text unmodified.
-            r += currChar;
+	    // We are stripping /* */ comments, so drop the '/' if we
+	    // just entered the comment.
+	    if (oldInComment != inComment) r = r.slice(0, -1);
+	    
+	    // Dropping /* */ comments, so don't save current char.
 
             // Out of comment?
             if ((prevChar == "*") && (currChar == "/")) {
@@ -119,7 +124,7 @@ function hideStrs(s) {
         }
 
         // Start // comment?
-        inCommentSingle = inCommentSingle || ((prevChar == "/") && (currChar == "/") && !inStrDouble && !inStrSingle);
+        inCommentSingle = inCommentSingle || ((prevChar == "/") && (currChar == "/") && !inStrDouble && !inStrSingle && !inComment);
         
         // In // comment?
         if (inCommentSingle) {
@@ -255,22 +260,6 @@ function extractCode(code) {
     return r;
 }
 
-function _removeComments(code) {
-    var remaining = code;
-    var r = "";
-    pos = remaining.indexOf("/*");
-    while (pos >= 0) {
-        r += remaining.slice(0, pos);
-        const next = remaining.indexOf("*/");
-        remaining = remaining.slice(next + 2);
-        pos = remaining.indexOf("/*");
-        if (next < 0) break;
-    }    
-    if (pos < 0) r += remaining;
-    
-    return r;
-}
-
 function rewrite(code) {
 
     // box-js is assuming that the JS will be run on Windows with cscript or wscript.
@@ -280,14 +269,12 @@ function rewrite(code) {
 
     // The following 2 code rewrites should not be applied to patterns
     // in string literals. Hide the string literals first.
+    //
+    // This also strips all comments.
     var counter = 1000000;
     const [newCode, strMap] = hideStrs(code);
     code = newCode;
-    
-    // Ugh. Some JS obfuscator peppers the code with spurious /*...*/
-    // comments. Delete all /*...*/ comments.
-    code = _removeComments(code);
-    
+        
     // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
     // = 12'. Acorn parsing fails on these with a assigning to rvalue
     // syntax error, so rewrite things like this so we can parse
@@ -377,7 +364,9 @@ If you run into unexpected results, try uncommenting lines that look like
             try {
                 //console.log("!!!! CODE !!!!");
                 //console.log(code);                
+                //console.log("!!!! CODE !!!!");
                 tree = acorn.parse(code, {
+                    ecmaVersion: "latest",
                     allowReturnOutsideFunction: true, // used when rewriting function bodies
                     plugins: {
                         // enables acorn plugin needed by prototype rewrite
@@ -931,6 +920,7 @@ function ActiveXObject(name) {
         
         // Is the name obfuscated in the source? Note that if the name
         // is given as a CLSID this will probably be true.
+        //console.log((new Error()).stack);
         name_re = new RegExp(name, 'i');
         pos = rawcode.search(name_re);
         if (pos === -1) {
