@@ -209,7 +209,15 @@ var location = {
        page. It can be set from a different origin than the associated
        document.
     */
-    href: 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe',
+    get href() {
+        if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe';
+        return this._href;
+    },
+    set href(url) {
+        this._href = url;
+        logIOC('HREF Location', {url}, "The script changed location.href.");
+	logUrl('HREF Location', url);
+    },
 
     /* 
        Location.protocol
@@ -330,6 +338,7 @@ function __getElementsByTagName(tag) {
     return fake_dict;
 };
 
+var __fakeParentElem = undefined;
 function __createElement(tag) {
     var fake_elem = {
         set src(url) {
@@ -351,6 +360,8 @@ function __createElement(tag) {
             logIOC('Remote Script', {url}, "The script set a remote script source.");
             logUrl('Remote Script', url);
         },
+        // Not ideal or close to correct, but sometimes needs a parentNode field.
+        parentNode: __fakeParentElem,
         log: [],
 	style: [],
 	appendChild: function() {
@@ -362,6 +373,13 @@ function __createElement(tag) {
         attributes: {},
         setAttribute: function(name, val) {
             this.attributes[name] = val;
+
+            // Setting the source of an element to (maybe) a URL?
+            if (name === "src") {
+                if (val.startsWith("//")) val = "https:" + val;
+                logIOC('Element Source', {val}, "The script set the src field of an element.");
+	        logUrl('Element Source', val);
+            }
         },
         setAttributeNode: function(name, val) {
             if (typeof(val) !== "undefined") {
@@ -400,8 +418,10 @@ function __createElement(tag) {
         toLowerCase: function() {
             return "// NOPE";
         },
+        onclick: undefined,
         click: function() {
             lib.info("click() method called on a document element.");
+            if (typeof(this.onclick) !== "undefined") this.onclick();
         },
         insertAdjacentHTML: function(position, content) {
             logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
@@ -411,6 +431,20 @@ function __createElement(tag) {
                     logUrl('Action Attribute', url);
                 };
             }
+        },
+        set innerHTML(content) {
+            this._innerHTML = content;
+            logIOC("Set innerHTML", {content}, "The script set the innerHTML of an element.");
+            const urls = pullActionUrls(content);
+            if (typeof(urls) !== "undefined") {
+                for (const url of urls) {
+                    logUrl('Action Attribute', url);
+                };
+            }
+        },
+        get innerHTML() {
+            if (typeof(this._innerHTML) === "undefined") this._innerHTML = "";
+            return this._innerHTML;
         },
 	removeChild: function() {},
         "classList" : {
@@ -425,6 +459,7 @@ function __createElement(tag) {
     };
     return fake_elem;
 };
+__fakeParentElem = __createElement("FakeParentElem");
 
 // Stubbed global navigator object.
 var navigator = {
@@ -446,16 +481,24 @@ var _generic_append_func = function(content) {
 var document = {
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
-    referrer: 'https://bing.com/',
+    referrer: 'https://www.bing.com/',
     body: __createElement("__document_body__"),
     location: location,
+    readyState: "complete",
     head: {
         innerHTML: "",
         append: _generic_append_func,
         appendChild: _generic_append_func,
     },
     defaultView: {},
-    cookie: "",
+    set cookie(val) {
+        this._cookie = val;
+        logIOC('document.cookie', val, "The script set a cookie.");
+    },
+    get cookie() {
+        if (typeof(this._cookie) === "undefined") this._cookie = "";
+        return this._cookie;
+    },
     ready: function(func) {
         func();
     },
@@ -478,25 +521,11 @@ var document = {
         if (typeof(ids) != "undefined") {
             for (var i = 0; i < ids.length; i++) {
                 if (char_codes_to_string(ids[i]) == id) {
-                    var r = {
-                        innerHTML: char_codes_to_string(data[i]),
-                        innerText: char_codes_to_string(data[i]),
-                        onclick: undefined,
-                        click: function() {
-                            if (typeof(this.onclick) !== "undefined") this.onclick();
-                        },
-                        getAttribute: function(attrId) {
-                            return this.attrs[attrId];
-                        },
-                        insertAdjacentHTML: function(position, content) {
-                            logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
-                            const urls = pullActionUrls(content);
-                            if (typeof(urls) !== "undefined") {
-                                for (const url of urls) {
-                                    logUrl('Action Attribute', url);
-                                };
-                            }
-                        },
+                    var r = __createElement(id);
+                    r.innerHTML = char_codes_to_string(data[i]);
+                    r.innerText = char_codes_to_string(data[i]);
+                    r.getAttribute = function(attrId) {
+                        return this.attrs[attrId];
                     };
                     r.attrs = attrs[i];
                     this.elementCache[id] = r;
@@ -554,6 +583,10 @@ var document = {
     createAttribute: function(name) {
         logIOC('Document.createAttribute()', {name}, "The script added attribute '" + name + "' to the document.");
         return __createElement(name);
+    },
+    querySelector: function(selectors) {
+        logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
+        return __createElement("foo");
     },
 };
 
@@ -637,10 +670,16 @@ var window = {
         constructor() {};    
     },
     URL: URL,
+    decodeURIComponent: decodeURIComponent,
 };
 window.self = window;
 window.top = window;
 self = window;
+const _localStorage = {
+    getItem: function(x) {return undefined},
+    setItem: function(x,y) {},
+};
+window.localStorage = _localStorage;
 
 // Initial stubbed object. Add items a needed.
 var screen = {
@@ -817,7 +856,11 @@ function setTimeout(func, time) {
     func();
 };
 function clearTimeout() {};
-function setInterval() {};
+function setInterval(func, val) {
+    if (typeof(func) === "function") {
+        func();
+    };
+};
 function clearInterval() {};
 
 class XMLHttpRequest {
@@ -886,10 +929,11 @@ function pullActionUrls(html) {
     if (typeof(html.match) == "undefined") return undefined;
     
     // Do we have action attributes?
-    const actPat = /action\s*=\s*"([^"]*)"/g;
+    const actPat = /(?:action|src)\s*=\s*"([^"]*)"/g;
     const r = [];
     for (const match of html.matchAll(actPat)) {
         var currAct = match[1];
+        if (currAct == "//null") continue;
         if (!currAct.startsWith("http") && !currAct.startsWith("//")) continue;
         if (currAct.startsWith("//")) currAct = "https:" + currAct;
         r.push(currAct);
@@ -910,3 +954,6 @@ const chrome = {
     },
     
 };
+
+Modernizr = {};
+
