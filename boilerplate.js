@@ -265,7 +265,7 @@ var location = {
        Is a USVString containing a '#' followed by the fragment identifier
        of the URL.
     */
-    hash: '',
+    hash: '#eyAiZW1haWwiIDogInZpY3RpbUBwbGVhc2UucGhpc2gubWUiIH0K',
 
     /* 
        Location.origin Read only
@@ -317,6 +317,7 @@ function __getElementsByTagName(tag) {
                 "getElementsByTagName" : __getElementsByTagName,
                 "title" : "My Fake Title",
                 style: {},
+                navigator: navigator,
                 getAttribute: function() { return {}; },
                 addEventListener: function(tag, func) {
                     // Simulate the event happing by running the function.
@@ -335,7 +336,7 @@ function __getElementsByTagName(tag) {
             };
         }
     });
-    return fake_dict;
+    return [fake_dict];
 };
 
 var __fakeParentElem = undefined;
@@ -462,8 +463,74 @@ function __createElement(tag) {
 __fakeParentElem = __createElement("FakeParentElem");
 
 // Stubbed global navigator object.
-var navigator = {
+const navigator = {
     userAgent: 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.2; WOW64; Trident/6.0; .NET4.0E; .NET4.0C; .NET CLR 3.5.30729; .NET CLR 2.0.50727; .NET CLR 3.0.30729; Tablet PC 2.0; InfoPath.3)',
+    clipboard: {        
+    },
+    connection: {
+    },
+    cookieEnabled: {
+    },
+    credentials: {
+    },
+    deviceMemory: {
+    },
+    geolocation: {
+    },
+    gpu: {
+    },
+    hid: {
+    },
+    hardwareConcurrency: {
+    },
+    ink: {
+    },
+    keyboard: {
+    },
+    language: {
+    },
+    languages: {
+    },
+    locks: {
+    },
+    maxTouchPoints: {
+    },
+    mediaCapabilities: {
+    },
+    mediaDevices: {
+    },
+    mediaSession: {
+    },
+    onLine: {
+    },
+    pdfViewerEnabled: {
+    },
+    permissions: {
+    },
+    presentation: {
+    },
+    serial: {
+    },
+    serviceWorker: {
+    },
+    scheduling: {
+    },
+    storage: {
+    },
+    userActivation: {
+    },
+    userAgent: {
+    },
+    userAgentData: {
+    },
+    virtualKeyboard: {
+    },
+    webdriver: {
+    },
+    windowControlsOverlay: {
+    },
+    xr: {
+    },    
 };
 
 var _generic_append_func = function(content) {
@@ -505,6 +572,9 @@ var document = {
     elementCache : {},
     getElementById : function(id) {
 
+	// Normalize ID.
+	if (id.startsWith(".")) id = id.slice(1);
+	
         // Already looked this up?
         if (typeof(this.elementCache[id]) !== "undefined") return this.elementCache[id];
         
@@ -519,6 +589,15 @@ var document = {
         /* IDS_AND_DATA */
         
         if (typeof(ids) != "undefined") {
+
+	    // Maybe just tracked as attr?
+	    for (var i = 0; i < attrs.length; i++) {
+		if (attrs[i].class === id) {
+		    return attrs[i];
+		}
+	    }
+
+	    // Look for it in ID map.
             for (var i = 0; i < ids.length; i++) {
                 if (char_codes_to_string(ids[i]) == id) {
                     var r = __createElement(id);
@@ -586,7 +665,7 @@ var document = {
     },
     querySelector: function(selectors) {
         logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
-        return __createElement("foo");
+	return document.getElementById(selectors);
     },
 };
 
@@ -671,6 +750,10 @@ var window = {
     },
     URL: URL,
     decodeURIComponent: decodeURIComponent,
+    set onload(func) {
+	lib.info("Script set window.onload function.");
+	func();
+    },
 };
 window.self = window;
 window.top = window;
@@ -680,6 +763,10 @@ const _localStorage = {
     setItem: function(x,y) {},
 };
 window.localStorage = _localStorage;
+window.String = String;
+window.RegExp = RegExp;
+window.JSON = JSON;
+window.Array = Array;
 
 // Initial stubbed object. Add items a needed.
 var screen = {
@@ -957,3 +1044,11 @@ const chrome = {
 
 Modernizr = {};
 
+mediaContainer = {
+    Click : function () {},
+};
+
+function addEventListener(event, func) {
+    console.log(event);
+    func();
+}
