@@ -321,6 +321,7 @@ function __makeFakeElem(data) {
         navigator: navigator,
         getAttribute: function() { return {}; },
         addEventListener: function(tag, func) {
+            if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func();
@@ -334,7 +335,8 @@ function __makeFakeElem(data) {
             trigger: function() {},
             special: {},
         },
-        innerHTML: data,    
+        innerHTML: data,
+        item: function() {},
     };
     return fakeDict;
 }
@@ -562,6 +564,8 @@ var _generic_append_func = function(content) {
 var document = {
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
+    scripts: [],
+    title: "A Web Page",
     referrer: 'https://www.bing.com/',
     body: __createElement("__document_body__"),
     location: location,
@@ -669,6 +673,7 @@ var document = {
     createElement: __createElement,
     createTextNode: function(text) {},
     addEventListener: function(tag, func) {
+        if (typeof(func) === "undefined") return;
         // Simulate the event happing by running the function.
         logIOC("Document.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
         func();
@@ -717,6 +722,58 @@ function requestAnimationFrame(func) {
     func();
 }
 
+// Initial stubbed object. Add items a needed.
+var screen = {
+    availHeight: 2000,
+    availWidth: 4000,
+    colorDepth: 12,
+    height: 1000,
+    isExtended: false,
+    mozBrightness: .3,
+    mozEnabled: false,
+    orientation: {
+        type: "landscape-primary",
+    },
+    pixelDepth: 9,
+    width: 2000,
+};
+
+class XMLHttpRequest {
+    constructor(){
+        this.method = null;
+        this.url = null;
+    };
+
+    addEventListener(tag, func) {
+        if (typeof(func) === "undefined") return;
+        // Simulate the event happing by running the function.
+        logIOC("XMLHttpRequest.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
+        func();
+    };
+
+    removeEventListener(tag) {
+        logIOC("XMLHttpRequest.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
+    };
+    
+    open(method, url) {
+        this.method = method;
+	// Maybe you can skip the http part of the URL and XMLHTTP
+	// still handles it?
+	if (url.startsWith("//")) {
+	    url = "http:" + url;
+	}
+        this.url = url;
+        lib.logIOC("XMLHttpRequest", {method: method, url: url}, "The script opened a HTTP request.");
+        lib.logUrl("XMLHttpRequest", url);
+    };
+
+    setRequestHeader(field, val) {
+        lib.logIOC("XMLHttpRequest", {field: field, value: val}, "The script set a HTTP header value.");
+    };
+    
+    send() {};
+};
+
 // Stubbed global window object.
 var window = {
     eval: function(cmd) { eval(cmd); },
@@ -730,11 +787,14 @@ var window = {
     close: function(){},
     requestAnimationFrame: requestAnimationFrame,
     matchMedia: function(){ return {}; },
+    setInterval:function(){ return {}; },
     atob: function(s){
         return atob(s);
     },
     setTimeout: function(f, i) {},
+    Date: Date,
     addEventListener: function(tag, func) {
+        if (typeof(func) === "undefined") return;
         // Simulate the event happing by running the function.
         logIOC("Window.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
         func();
@@ -749,6 +809,7 @@ var window = {
     },
     createDocumentFragment: function() {},
     createElement: __createElement,    
+    screen: screen,
     location: location,
     localStorage: {
         // Users and session to distinguish and generate statistics about website traffic. 
@@ -788,6 +849,7 @@ var window = {
 	logIOC('MAIL_URL Location', {url}, "The script changed window.MAIL_URL.");
 	logUrl('MAIL_URL Location', url);
     },
+    XMLHttpRequest: XMLHttpRequest,
 };
 window.self = window;
 window.top = window;
@@ -802,10 +864,6 @@ window.RegExp = RegExp;
 window.JSON = JSON;
 window.Array = Array;
 localStorage = _localStorage;
-
-// Initial stubbed object. Add items a needed.
-var screen = {
-};
 
 // Initial stubbed object. Add items a needed.
 var ShareLink = {
@@ -987,41 +1045,6 @@ function setInterval(func, val) {
 };
 function clearInterval() {};
 
-class XMLHttpRequest {
-    constructor(){
-        this.method = null;
-        this.url = null;
-    };
-
-    addEventListener(tag, func) {
-        // Simulate the event happing by running the function.
-        logIOC("XMLHttpRequest.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
-        func();
-    };
-
-    removeEventListener(tag) {
-        logIOC("XMLHttpRequest.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
-    };
-    
-    open(method, url) {
-        this.method = method;
-	// Maybe you can skip the http part of the URL and XMLHTTP
-	// still handles it?
-	if (url.startsWith("//")) {
-	    url = "http:" + url;
-	}
-        this.url = url;
-        lib.logIOC("XMLHttpRequest", {method: method, url: url}, "The script opened a HTTP request.");
-        lib.logUrl("XMLHttpRequest", url);
-    };
-
-    setRequestHeader(field, val) {
-        lib.logIOC("XMLHttpRequest", {field: field, value: val}, "The script set a HTTP header value.");
-    };
-    
-    send() {};
-};
-
 // Some JS checks to see if these are defined. Do very basic stubbing
 // until better stubbing is needed.
 var exports = {};
@@ -1086,7 +1109,6 @@ mediaContainer = {
 };
 
 function addEventListener(event, func) {
-    console.log(event);
     func();
 }
 
