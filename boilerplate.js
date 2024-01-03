@@ -1,6 +1,56 @@
 const parse = require("node-html-parser").parse;
 const lib = require("./lib.js");
 
+// Dummy event to use for faked event handler calls.
+const dummyEvent = {
+
+    // A boolean value indicating whether or not the event bubbles up through the DOM.
+    bubbles: true,
+
+    // A boolean value indicating whether the event is cancelable.
+    cancelable: true,
+
+    //A boolean indicating whether or not the event can bubble across
+    //the boundary between the shadow DOM and the regular DOM.
+    composed: true,
+
+    // A reference to the currently registered target for the
+    // event. This is the object to which the event is currently
+    // slated to be sent. It's possible this has been changed along
+    // the way through retargeting.
+    currentTarget: "??",
+
+    // Indicates whether or not the call to event.preventDefault() canceled the event.
+    defaultPrevented: false,
+
+    // Indicates which phase of the event flow is being processed. It
+    // is one of the following numbers: NONE, CAPTURING_PHASE,
+    // AT_TARGET, BUBBLING_PHASE.
+    eventPhase: 1, // CAPTURING_PHASE
+
+    // Indicates whether or not the event was initiated by the browser
+    // (after a user click, for instance) or by a script (using an
+    // event creation method, for example).
+    isTrusted: true,
+
+    // A reference to the object to which the event was originally
+    // dispatched.
+    target: "??",
+
+    // The time at which the event was created (in milliseconds). By
+    // specification, this value is time since epoch—but in reality,
+    // browsers' definitions vary. In addition, work is underway to
+    // change this to be a DOMHighResTimeStamp instead.
+    timeStamp: 1702919791198,
+
+    // The name identifying the type of the event.
+    type: "FILL IN BASED ON FAKED HANDLER",
+    
+    // For Key events.
+    key: 97, // "a"
+
+};
+
 // Handle Blobs. All Blob methods in the real Blob class for dumping
 // the data in a Blob are asynch and box-js is all synchronous, so
 // rather than rewriting the entire tool to be asynch we are just
@@ -324,7 +374,7 @@ function __makeFakeElem(data) {
             if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
-            func();
+            func(dummyEvent);
         },
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -469,7 +519,7 @@ function __createElement(tag) {
             if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
-            func();
+            func(dummyEvent);
         },
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -617,13 +667,6 @@ var document = {
         
         if (typeof(ids) != "undefined") {
 
-	    // Maybe just tracked as attr?
-	    for (var i = 0; i < attrs.length; i++) {
-		if (attrs[i].class === id) {
-		    return attrs[i];
-		}
-	    }
-
 	    // Look for it in ID map.
             for (var i = 0; i < ids.length; i++) {
                 if (char_codes_to_string(ids[i]) == id) {
@@ -638,6 +681,16 @@ var document = {
                     return r;                    
                 }
             }
+
+            // Maybe just tracked as attr?
+	    for (var i = 0; i < attrs.length; i++) {
+		if ((attrs[i].class === id) || ((attrs[i].id === id))) {
+                    var r = __createElement(id);
+                    r.value = attrs[i].value;
+		    return r;
+		}
+	    }
+            
         }
 
         // got nothing to return. Make up some fake element and hope for the best.
@@ -685,7 +738,7 @@ var document = {
         if (typeof(func) === "undefined") return;
         // Simulate the event happing by running the function.
         logIOC("Document.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
-        func();
+        func(dummyEvent);
     },
     removeEventListener: function(tag) {
         logIOC("Document.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -757,7 +810,7 @@ class XMLHttpRequest {
         if (typeof(func) === "undefined") return;
         // Simulate the event happing by running the function.
         logIOC("XMLHttpRequest.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
-        func();
+        func(dummyEvent);
     };
 
     removeEventListener(tag) {
@@ -784,85 +837,97 @@ class XMLHttpRequest {
 };
 
 // Stubbed global window object.
-var window = {
-    eval: function(cmd) { eval(cmd); },
-    resizeTo: function(a,b){},
-    moveTo: function(a,b){},
-    open: function(url) {
-        if ((typeof(url) == "string") && (url.length > 0)){
-            logIOC('window.open()', {url}, "The script loaded a resource.");
-        }
-    },
-    close: function(){},
-    requestAnimationFrame: requestAnimationFrame,
-    matchMedia: function(){ return {}; },
-    setInterval:function(){ return {}; },
-    atob: function(s){
-        return atob(s);
-    },
-    setTimeout: function(f, i) {},
-    Date: Date,
-    addEventListener: function(tag, func) {
-        if (typeof(func) === "undefined") return;
-        // Simulate the event happing by running the function.
-        logIOC("Window.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
-        func();
-    },
-    removeEventListener: function(tag) {
-        logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
-    },
-    attachEvent: function(){},
-    getComputedStyle: function(){
-	return ["??",
-		"-moz-"];
-    },
-    createDocumentFragment: function() {},
-    createElement: __createElement,    
-    screen: screen,
-    location: location,
-    localStorage: {
-        // Users and session to distinguish and generate statistics about website traffic. 
-        "___utma" : undefined,
-        // Users and session to distinguish and generate statistics about website traffic. 
-        "__utma" : undefined,
-        // Determine new sessions and visits and generate statistics about website traffic. 
-        "__utmb" : undefined,
-        // Determine new sessions and visits and generate statistics about website traffic. 
-        "__utmc" : undefined,
-        // Process user requests and generate statistics about the website traffic. 
-        "__utmt" : undefined,
-        // Store customized variable data at visitor level and generate statistics about the website traffic. 
-        "__utmv" : undefined,
-        // To record the traffic source or campaign how users ended up on the website. 
-        "__utmz" : undefined,
-    },
-    document: document,
-    navigator: navigator,
-    _NavbarView: class _NavbarView {
-        constructor() {};    
-    },
-    URL: URL,
-    decodeURIComponent: decodeURIComponent,
-    set onload(func) {
-	lib.info("Script set window.onload function.");
-	func();
-    },
-    get MAIL_URL() {
-        if (typeof(this._MAIL_URL) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe';
-        return this._MAIL_URL;
-    },
-    set MAIL_URL(url) {
-	// Could be base64.
-	if (atob(url)) url = atob(url);
-	this._MAIL_URL = url;
-	logIOC('MAIL_URL Location', {url}, "The script changed window.MAIL_URL.");
-	logUrl('MAIL_URL Location', url);
-    },
-    XMLHttpRequest: XMLHttpRequest,
-};
+function makeWindowObject() {
+    var window = {
+        eval: function(cmd) { eval(cmd); },
+        resizeTo: function(a,b){},
+        moveTo: function(a,b){},
+        open: function(url) {
+            if ((typeof(url) == "string") && (url.length > 0)){
+                logIOC('window.open()', {url}, "The script loaded a resource.");
+            }
+        },
+        close: function(){},
+        requestAnimationFrame: requestAnimationFrame,
+        matchMedia: function(){ return {}; },
+        setInterval:function(){ return {}; },
+        atob: function(s){
+            return atob(s);
+        },
+        setTimeout: function(f, i) {},
+        Date: Date,
+        addEventListener: function(tag, func) {
+            if (typeof(func) === "undefined") return;
+            // Simulate the event happing by running the function.
+            logIOC("Window.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
+            func(dummyEvent);
+        },
+        removeEventListener: function(tag) {
+            logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
+        },
+        attachEvent: function(){},
+        getComputedStyle: function(){
+	    return ["??",
+		    "-moz-"];
+        },
+        createDocumentFragment: function() {},
+        createElement: __createElement,    
+        screen: screen,
+        _location: location,
+        get location() {
+            return this._location;
+        },
+        set location(url) {
+            this._location.href = url;
+        },
+        localStorage: {
+            // Users and session to distinguish and generate statistics about website traffic. 
+            "___utma" : undefined,
+            // Users and session to distinguish and generate statistics about website traffic. 
+            "__utma" : undefined,
+            // Determine new sessions and visits and generate statistics about website traffic. 
+            "__utmb" : undefined,
+            // Determine new sessions and visits and generate statistics about website traffic. 
+            "__utmc" : undefined,
+            // Process user requests and generate statistics about the website traffic. 
+            "__utmt" : undefined,
+            // Store customized variable data at visitor level and generate statistics about the website traffic. 
+            "__utmv" : undefined,
+            // To record the traffic source or campaign how users ended up on the website. 
+            "__utmz" : undefined,
+        },
+        document: document,
+        navigator: navigator,
+        _NavbarView: class _NavbarView {
+            constructor() {};    
+        },
+        URL: URL,
+        decodeURIComponent: decodeURIComponent,
+        set onload(func) {
+	    lib.info("Script set window.onload function.");
+	    func();
+        },
+        get MAIL_URL() {
+            if (typeof(this._MAIL_URL) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe';
+            return this._MAIL_URL;
+        },
+        set MAIL_URL(url) {
+	    // Could be base64.
+	    if (atob(url)) url = atob(url);
+	    this._MAIL_URL = url;
+	    logIOC('MAIL_URL Location', {url}, "The script changed window.MAIL_URL.");
+	    logUrl('MAIL_URL Location', url);
+        },
+        XMLHttpRequest: XMLHttpRequest,
+    };
+
+    return window;
+}
+window = makeWindowObject();
 window.self = window;
 window.top = window;
 self = window;
+window.parent = makeWindowObject();
 const _localStorage = {
     getItem: function(x) {return undefined},
     setItem: function(x,y) {},
@@ -1082,7 +1147,7 @@ class Image {
 function pullActionUrls(html) {
 
     // Sanity check.
-    if (typeof(html.match) == "undefined") return undefined;
+    if ((typeof(html) == "undefined") || (typeof(html.match) == "undefined")) return undefined;
     
     // Do we have action attributes?
     const actPat = /(?:action|src)\s*=\s*"([^"]*)"/g;
@@ -1118,7 +1183,7 @@ mediaContainer = {
 };
 
 function addEventListener(event, func) {
-    func();
+    func(dummyEvent);
 }
 
 if (typeof(arguments) === "undefined") {
