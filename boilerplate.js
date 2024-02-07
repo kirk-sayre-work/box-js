@@ -429,6 +429,10 @@ function __createElement(tag) {
             logIOC('Remote Script', {url}, "The script set a remote script source.");
             logUrl('Remote Script', url);
         },
+        set onerror(func) {
+            // Call the onerror handler.
+            func();
+        },
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
@@ -1199,4 +1203,10 @@ function addEventListener(event, func) {
 
 if (typeof(arguments) === "undefined") {
     var arguments = [];
+}
+
+// TODO: Add flag to specify whether to use high or low values.
+Math.random = function() {
+    logIOC('Math.random', {}, "Script called Math.random().");
+    return 0.0;
 }
