@@ -76,10 +76,13 @@ function stripSingleLineComments(s) {
     const lines = s.split("\n");
     var r = "";
     for (const line of lines) {
-        var lineStrip = line.trim();
-        // Full line comment?
-        if (lineStrip.startsWith("//")) continue;
-        r += line + "\n";
+        var lineStrip = line.trim() + "\r";
+        for (const subLine of lineStrip.split("\r")) {
+            // Full line comment?
+            var subLineStrip = subLine.trim();
+            if (subLineStrip.startsWith("//")) continue;
+            r += subLineStrip + "\n";
+        }
     }
     return r;
 }
@@ -119,6 +122,16 @@ function hideStrs(s) {
     var resetSlashes = false;
     var justStartedRegex = false;
     s = stripSingleLineComments(s);
+    // For debugging.
+    var window = "               ";
+    // Special case. Regex uses like '/.../["test"]' are really hard
+    // to deal with. Hide all '["test"]' instances.
+    var tmpName = "HIDE_" + counter++;
+    s = s.replace(/\["test"\]/g, tmpName);
+    allStrs[tmpName] = '["test"]';
+    tmpName = "HIDE_" + counter++;
+    s = s.replace(/\['test'\]/g, tmpName);
+    allStrs[tmpName] = "['test']";
     //console.log("prev,curr,dbl,single,commsingl,comm,regex,slash,justexitcom");
     for (let i = 0; i < s.length; i++) {
 
@@ -140,6 +153,9 @@ function hideStrs(s) {
             slashSubstr = "";
             resetSlashes = true;
         }
+        // Debugging.
+        //window = window.slice(1,) + currChar;
+        //console.log(window);
         
         // Start /* */ comment?
 	var oldInComment = inComment;
@@ -194,7 +210,7 @@ function hideStrs(s) {
             r += currChar;
 
             // Out of comment?
-            if (currChar == "\n") {
+            if ((currChar == "\n") || (currChar == "\r")) {
                 inCommentSingle = false;
             }
 
@@ -716,6 +732,11 @@ if (argv["throttle-writes"]) {
     lib.throttleFileWrites(true);
 };
 
+// Track if we are throttling frequent command executions.
+if (argv["throttle-commands"]) {
+    lib.throttleCommands(true);
+};
+
 // Rewrite the code if needed.
 code = rewrite(code);
 
@@ -849,7 +870,7 @@ var wscript_proxy = new Proxy({
     scriptfullname: sampleFullName,
     scriptname: sampleName,
     quit: function() {        
-        lib.logIOC("WScript", "Quit()", "The sample explcitly called WScript.Quit().");
+        lib.logIOC("WScript", "Quit()", "The sample explicitly called WScript.Quit().");
         //console.trace()
         if (!argv["ignore-wscript-quit"]) {
             process.exit(0);

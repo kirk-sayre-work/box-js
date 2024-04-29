@@ -70,7 +70,7 @@
         {
             "name": "fake-script-engine",
             "type": "String",
-            "description": "The script engine to report in WScript.FullName and WScript.Name (ex. 'cscript.exe' or 'wscript.exe'). Default is wscript.exe."
+            "description": "The script engine to report in WScript.FullName and WScript.Name (ex. 'cscript.exe', 'wscript.exe', or 'node'). Default is wscript.exe."
         },
         {
             "name": "fake-cl-args",
@@ -176,6 +176,11 @@
             "name": "throttle-writes",
             "type": "Boolean",
             "description": "Throttle reporting and data tracking of file writes that write a LOT of data"
+        },
+        {
+            "name": "throttle-commands",
+            "type": "Boolean",
+            "description": "Stop the analysis if a LOT of the same commands have been run"
         },
         {
             "name": "extract-conditional-code",
