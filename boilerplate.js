@@ -322,7 +322,17 @@ var location = {
        Is a USVString containing a '#' followed by the fragment identifier
        of the URL.
     */
-    hash: '#eyAiZW1haWwiIDogInZpY3RpbUBwbGVhc2UucGhpc2gubWUiIH0K',
+    get hash() {
+        // Return a fake fragment ID if location is not set.
+        if (typeof(this._href) === "undefined") {
+            return '#eyAiZW1haWwiIDogInZpY3RpbUBwbGVhc2UucGhpc2gubWUiIH0K';
+        };
+        // Return the actual fragment ID if we have one.
+        const i = this._href.indexOf("#");
+        var r = "";
+        if (i >= 0) r = this._href.slice(i);
+        return r;
+    },
 
     /* 
        Location.origin Read only
@@ -414,6 +424,7 @@ function __getElementsByTagName(tag) {
     }
 };
 
+var __currSelectedVal = undefined;
 var __fakeParentElem = undefined;
 function __createElement(tag) {
     var fake_elem = {
@@ -490,6 +501,9 @@ function __createElement(tag) {
         // Probably wrong, fix this if it causes problems.
         querySelector: function(tag) {
             return __createElement(tag);
+        },
+        select: function() {
+            __currSelectedVal = this.val;
         },
         cloneNode: function() {
             // Actually clone the element (deep copy).
@@ -657,6 +671,11 @@ var document = {
         func();
     },
     elementCache : {},
+    execCommand : function(cmd) {
+        if ((cmd == "copy") && (typeof(__currSelectedVal) !== "undefined")) {
+            logIOC('Clipboard', __currSelectedVal, "The script pasted text into the clipboard.");
+        }
+    },
     getElementById : function(id) {
 
 	// Normalize ID.
@@ -688,6 +707,7 @@ var document = {
                     };
                     r.attrs = attrs[i];
                     this.elementCache[id] = r;
+                    r.val = jqueryVals[id];
                     return r;                    
                 }
             }
@@ -704,7 +724,9 @@ var document = {
         }
 
         // got nothing to return. Make up some fake element and hope for the best.
-        return __createElement(id);
+        var r = __createElement(id);
+        r.val = jqueryVals[id];
+        return r;
     },
     documentElement: {
         style: {},
@@ -836,7 +858,14 @@ class XMLHttpRequest {
     set onreadystatechange(func) {
         lib.info("onreadystatechange() method set for XMLHTTP object.");
         this._onreadystatechange = func;
-        if (typeof(func) !== "undefined") func();
+        if (typeof(func) !== "undefined") {
+            try {
+                func("fake");
+            }
+            catch (e) {
+                lib.info("Callback function execution failed. Continuing analysis anyway.");
+            }
+        }
     };
     
     addEventListener(tag, func) {
@@ -874,7 +903,7 @@ dataLayer = [];
 // Stubbed global window object.
 function makeWindowObject() {
     var window = {
-        eval: function(cmd) { eval(cmd); },
+        eval: function(cmd) { return eval(cmd); },
         resizeTo: function(a,b){},
         moveTo: function(a,b){},
         open: function(url) {
@@ -964,6 +993,7 @@ window.self = window;
 window.top = window;
 self = window;
 window.parent = makeWindowObject();
+download = window;
 const _localStorage = {
     getItem: function(x) {return undefined},
     setItem: function(x,y) {},
@@ -1238,3 +1268,14 @@ Math.random = function() {
     if (randVal > 1.0) randval = 0.01;
     return r;
 }
+
+// Fake history object.
+var history = {
+
+    replaceState: function(state, unused, url) {
+        logIOC('history', url, "The script changed browsing history with history.replaceState().");
+        // Let's assume that the current location is being set to this URL.
+        location._href = url;
+    },
+    pushState: function() {},
+};
