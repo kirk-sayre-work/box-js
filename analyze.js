@@ -1101,6 +1101,23 @@ function mapCLSID(clsid) {
     }
 }
 
+function _makeDomDocument() {
+    const r = {
+        createElement: function(tag) {
+	    const r = {
+		dataType: "??",
+		text: "",
+		get nodeTypedValue() {
+		    if (this.dataType != "bin.base64") return this.text;
+		    return atob(this.text);
+		},
+	    };
+	    return r;
+	},
+    };
+    return r;
+}
+
 function ActiveXObject(name) {
 
     // Check for use of encoded ActiveX object names.
@@ -1137,6 +1154,9 @@ function ActiveXObject(name) {
     name = name.toLowerCase();
     if (name.match("xmlhttp") || name.match("winhttprequest")) {
         return require("./emulator/XMLHTTP");
+    }
+    if (name.match("domdocument")) {
+	return _makeDomDocument();
     }
     if (name.match("dom")) {
         const r = {
