@@ -210,8 +210,18 @@
         {
             "name": "decode-uri-component-as-ioc",
             "type": "Boolean",
-            "description": "Log Unique decodeURIComponent results as IOC's"
-        }
+            "description": "Log Unique decodeURIComponent results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
+        },
+        {
+            "name": "decode-unescape-as-ioc",
+            "type": "Boolean",
+            "description": "Log Unique unescape results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
+        },
+        {
+            "name": "decode-uri-as-ioc",
+            "type": "Boolean",
+            "description": "Log Unique decodeURI results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
+        }	
     ],
     "export": [
         {

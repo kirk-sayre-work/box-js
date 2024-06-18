@@ -968,6 +968,8 @@ function makeWindowObject() {
         },
         URL: URL,
         decodeURIComponent: decodeURIComponent,
+	unescape: unescape,
+	decodeURI: decodeURI,
         set onload(func) {
 	    lib.info("Script set window.onload function.");
 	    func();

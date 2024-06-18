@@ -1002,8 +1002,26 @@ const sandbox = {
 	}
         return out
     },
+    unescape: (x) => {
+       out = unescape(x)
+       if (argv["decode-unescape-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("unescape",{out}, `unescape Output`);
+          }
+        }
+        return out
+    },	
+    decodeURI: (x) => {
+       out = decodeURI(x)
+       if (argv["decode-uri-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("decodeURI",{out}, `decodeURI Output`);
+          }
+        }
+        return out
+    },
     self: {},
-    require
+    require	
 };
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
