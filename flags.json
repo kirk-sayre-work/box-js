@@ -221,7 +221,12 @@
             "name": "decode-uri-as-ioc",
             "type": "Boolean",
             "description": "Log Unique decodeURI results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
-        }	
+        },	
+	{
+            "name": "ignore-rewrite-errors",
+            "type": "Boolean",
+            "description": "Analyze original sample if any sample rewrites fail."
+        }
     ],
     "export": [
         {
