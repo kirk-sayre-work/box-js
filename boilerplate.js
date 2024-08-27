@@ -658,6 +658,7 @@ var document = {
         innerHTML: "",
         append: _generic_append_func,
         appendChild: _generic_append_func,
+        prepend: _generic_append_func,
     },
     defaultView: {},
     set cookie(val) {
@@ -904,6 +905,13 @@ dataLayer = [];
 // Stubbed global window object.
 function makeWindowObject() {
     var window = {
+        get park() {
+            if (typeof(this._park) === "undefined") this._park = '???';
+            return this._park;
+        },
+        set park(val) {
+            logIOC('Window Parking', val, "The script changed window.park.");
+        },        
         eval: function(cmd) { return eval(cmd); },
         resizeTo: function(a,b){},
         moveTo: function(a,b){},
@@ -1247,7 +1255,7 @@ function pullActionUrls(html) {
     return r;
 }
 
-// Stubbing for chrome object. Currently does nothing.
+// Stubbing for chrome object. Currently does very little.
 const chrome = {
 
     extension: {
@@ -1255,7 +1263,18 @@ const chrome = {
             addListener: function () {}
         },            
     },
-    
+
+    runtime : {
+        sendMessage : function(info) {
+            if (info["url"]) {
+                var url = info["url"];
+                var method = "??";
+                if (info["message"]) method = info["message"];
+                lib.logIOC("chrome.runtime.sendMessage", {method: method, url: url}, "The script opened a HTTP request.");
+                lib.logUrl("chrome.runtime.sendMessage", url);
+            };
+        },
+    },    
 };
 
 Modernizr = {};
@@ -1292,3 +1311,4 @@ var history = {
     },
     pushState: function() {},
 };
+
