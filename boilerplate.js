@@ -451,6 +451,12 @@ function __createElement(tag) {
             // Call the onerror handler.
             func();
         },
+        set value(txt) {
+            this.val = txt;
+        },
+        get value() {
+            return this.val;
+        },
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
@@ -567,7 +573,10 @@ __fakeParentElem = __createElement("FakeParentElem");
 // Stubbed global navigator object.
 const navigator = {
     userAgent: 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.2; WOW64; Trident/6.0; .NET4.0E; .NET4.0C; .NET CLR 3.5.30729; .NET CLR 2.0.50727; .NET CLR 3.0.30729; Tablet PC 2.0; InfoPath.3)',
-    clipboard: {        
+    clipboard: {
+        writeText : function(txt) {
+            logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
+        },
     },
     connection: {
     },
@@ -762,6 +771,7 @@ var document = {
         eval(extractJSFromHTA(node));
     },
     getElementsByTagName: __getElementsByTagName,
+    getElementsByName: __getElementsByTagName,
     getElementsByClassName: __getElementsByTagName,
     createDocumentFragment: function() {
         return __createElement("__doc_fragment__");
@@ -1218,6 +1228,10 @@ var exports = {};
 function fetch(url, data) {
     lib.logIOC("fetch", {url: url, data: data}, "The script fetch()ed a URL.");
     lib.logUrl("fetch", url);
+    return {
+	ok : true,
+	json : function() { return "1"; },
+    };
 };
 
 // Image class stub.
@@ -1312,3 +1326,8 @@ var history = {
     pushState: function() {},
 };
 
+// Fake sessionStorage object.
+var sessionStorage = {
+    getItem: function() {},
+    setItem: function() {},
+};
