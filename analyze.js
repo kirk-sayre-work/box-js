@@ -750,7 +750,6 @@ cc decoder.c -o decoder
                     return require("./patches/catch.js")(val);
                 });
             }
-
             code = escodegen.generate(tree);
             //console.log("!!!! CODE !!!!");
             //console.log(code);
