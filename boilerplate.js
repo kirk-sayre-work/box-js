@@ -378,7 +378,7 @@ function __makeFakeElem(data) {
                 logUrl('Action Attribute', url);
             };
         }
-        return "";
+        return __createElement("FAKEELEM");
     };
     
     var fakeDict = {
@@ -410,6 +410,8 @@ function __makeFakeElem(data) {
         },
         innerHTML: data,
         item: function() {},
+        removeChild: function() {},
+        cloneNode: func,
     };
     return fakeDict;
 }
@@ -528,8 +530,9 @@ function __createElement(tag) {
             __currSelectedVal = this.val;
         },
         cloneNode: function() {
-            // Actually clone the element (deep copy).
-            return JSON.parse(JSON.stringify(this));
+            //// Actually clone the element (deep copy).
+            //return JSON.parse(JSON.stringify(this));
+            return __createElement("FAKEELEM");
         },
         toLowerCase: function() {
             return "// NOPE";
