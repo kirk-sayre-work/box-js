@@ -378,7 +378,7 @@ function __makeFakeElem(data) {
                 logUrl('Action Attribute', url);
             };
         }
-        return "";
+        return __createElement("FAKEELEM");
     };
     
     var fakeDict = {
@@ -410,6 +410,8 @@ function __makeFakeElem(data) {
         },
         innerHTML: data,
         item: function() {},
+        removeChild: function() {},
+        cloneNode: func,
     };
     return fakeDict;
 }
@@ -528,8 +530,9 @@ function __createElement(tag) {
             __currSelectedVal = this.val;
         },
         cloneNode: function() {
-            // Actually clone the element (deep copy).
-            return JSON.parse(JSON.stringify(this));
+            //// Actually clone the element (deep copy).
+            //return JSON.parse(JSON.stringify(this));
+            return __createElement("FAKEELEM");
         },
         toLowerCase: function() {
             return "// NOPE";
@@ -588,7 +591,7 @@ __fakeParentElem = __createElement("FakeParentElem");
 
 // Stubbed global navigator object.
 const navigator = {
-    userAgent: 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.2; WOW64; Trident/6.0; .NET4.0E; .NET4.0C; .NET CLR 3.5.30729; .NET CLR 2.0.50727; .NET CLR 3.0.30729; Tablet PC 2.0; InfoPath.3)',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     clipboard: {
         writeText : function(txt) {
             logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
