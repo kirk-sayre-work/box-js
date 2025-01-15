@@ -185,4 +185,16 @@ constructor.prototype.bind = function(context, func) {
     };
     return r;
 };
+
+// Fake version of require() to fake importing some packages.
+/*
+let _origRequire = require;
+console.log(_origRequire);
+const require = function(pname) {
+    if (pname == "requests") return fakeRequests;
+    return _origRequire(pname);
+}
+*/
+
 /* End patches */
+

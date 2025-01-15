@@ -116,6 +116,7 @@ function WScriptShell() {
         
 	// lacks the HKEY_CURRENT_USER reg key by default (y tho?)
 	this._reg_entries["HKEY_CURRENT_USER"] = {}
+	this._reg_entries["HKEY_CURRENT_USER"]["Control Panel"] = {"International" : {"Locale" : 0x407}}
     }
 
     // expand registry acronyms and make lowercase
@@ -166,7 +167,7 @@ function WScriptShell() {
 	    return value
 	}
 	else {
-	    lib.warning(`Unknown registry key ${key}!`);
+	    lib.warning(`Unknown registry key ${key}`);
 	    //return "";
             throw("Registry key not found.");
 	}
