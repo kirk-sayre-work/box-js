@@ -478,7 +478,9 @@ function __createElement(tag) {
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
-	style: [],
+	style: {
+	    setProperty: function() {},
+	},
 	appendChild: function() {
             return __createElement("__append__");
         },
