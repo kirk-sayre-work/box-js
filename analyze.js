@@ -1020,6 +1020,7 @@ const sandbox = {
                 lib.logIOC("PayloadExec", x, "The script executed JS returned from a C2 server.");
             }
         },
+	clear: function() {},
     },
     Enumerator: require("./emulator/Enumerator"),
     GetObject: require("./emulator/WMI").GetObject,
