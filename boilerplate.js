@@ -478,7 +478,9 @@ function __createElement(tag) {
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
-	style: [],
+	style: {
+	    setProperty: function() {},
+	},
 	appendChild: function() {
             return __createElement("__append__");
         },
@@ -589,12 +591,26 @@ function __createElement(tag) {
 };
 __fakeParentElem = __createElement("FakeParentElem");
 
+// Fake up the then() method. This dict can be returned by methods
+// that use the a.b().then() pattern. All this does is call the
+// function passed to the then().
+const __stubbed_then = {
+    then: function(f) {
+	f();
+    },
+}
+
+// Track the current text in the clipboard.
+var __currClipboardData = "";
+
 // Stubbed global navigator object.
 const navigator = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     clipboard: {
         writeText : function(txt) {
             logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
+	    __currClipboardData = txt;
+	    return __stubbed_then;
         },
     },
     connection: {
@@ -703,6 +719,7 @@ var document = {
     execCommand : function(cmd) {
         if ((cmd == "copy") && (typeof(__currSelectedVal) !== "undefined")) {
             logIOC('Clipboard', __currSelectedVal, "The script pasted text into the clipboard.");
+	    __currClipboardData = __currSelectedVal;
         }
     },
     getElementById : function(id) {
@@ -756,6 +773,7 @@ var document = {
         var r = __createElement(id);
         r.val = jqueryVals[id];
         if (typeof(r.val) == "undefined") r.val = "";
+	r.prepend = function() {};
         return r;
     },
     documentElement: {
@@ -1022,6 +1040,11 @@ function makeWindowObject() {
 	    logUrl('MAIL_URL Location', url);
         },
         XMLHttpRequest: XMLHttpRequest,
+	clipboardData: {
+	    getData: function() {
+		return __currClipboardData;
+	    },
+	},
     };
 
     return window;
@@ -1248,6 +1271,12 @@ function fetch(url, data) {
     return {
 	ok : true,
 	json : function() { return "1"; },
+	then: function(f) {
+	    f();
+	    return {
+		catch: function() {},
+	    };
+	},
     };
 };
 
@@ -1348,3 +1377,9 @@ var sessionStorage = {
     getItem: function() {},
     setItem: function() {},
 };
+
+// Stubbed URLSearchParams class.
+class URLSearchParams {
+    constructor() {};
+    get() {};
+}
