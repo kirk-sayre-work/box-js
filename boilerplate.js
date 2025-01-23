@@ -428,7 +428,7 @@ function __getElementsByTagName(tag) {
         return r;
     }
     else {
-        return [__makeFakeElem("")];
+        return [__makeFakeElem(""), __makeFakeElem(""), __makeFakeElem("")];
     }
 };
 
