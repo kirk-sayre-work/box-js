@@ -1097,7 +1097,7 @@ function adjustIframes() {};
 // Function form of jQuery().
 var funcDict = {
     on: function(){ return funcDict },
-    val: function() {},
+    val: function() { return "some value" },
     click: function(f) {
 	// Fake event arg for click function. Add fields as needed.
 	const e = {
@@ -1144,6 +1144,10 @@ var funcDict = {
     width: function() {},
     resize: function() {},
     blur: function() {},
+    submit: function(func) {
+        func(dummyEvent);
+    },
+    hide: function() {},
 };
 var jQuery = function(field){
     // Handle things like $(document) by just returning document.
@@ -1184,6 +1188,12 @@ jQuery.support = {
 };
 jQuery.boxModel = false;
 jQuery.ajaxSetup = function() {};
+jQuery.ajax = function(params) {
+    const url = params["url"];
+    if (typeof(url) == "undefined") return;
+    logIOC('AJAX', {url}, "The script used $.ajax() to hit a URL.");
+    logUrl('AJAX', url);    
+};
 jQuery.event = {
     add: function() {},
     remove: function() {},
@@ -1195,7 +1205,10 @@ jQuery.isFunction = function() {};
 jQuery.expr = {
     pseudos: {},
 };
-
+jQuery.getJSON = function(url) {
+    logIOC('JQuery.getJSON()', {url}, "The script called JQuery.getJSON()");
+    logUrl('JQuery.getJSON()', url);
+};
 // Looks like that can be a window field.
 window.jQuery = jQuery
 
