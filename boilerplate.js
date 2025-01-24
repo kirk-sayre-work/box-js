@@ -331,9 +331,11 @@ var location = {
     get hash() {
         // Return a fake fragment ID if location is not set.
         if (typeof(this._href) === "undefined") {
-            return '#eyAiZW1haWwiIDogInZpY3RpbUBwbGVhc2UucGhpc2gubWUiIH0K';
+            var r = '#foo@bar.baz';
+            return r;
         };
         // Return the actual fragment ID if we have one.
+        console.log(this._href);
         const i = this._href.indexOf("#");
         var r = "";
         if (i >= 0) r = this._href.slice(i);
@@ -832,6 +834,7 @@ var document = {
         logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
 	return document.getElementById(selectors);
     },
+    keypress: function() {},
 };
 
 // Stubbed out URL class.
@@ -1097,13 +1100,9 @@ function adjustIframes() {};
 // Function form of jQuery().
 var funcDict = {
     on: function(){ return funcDict },
-    val: function() { return "some value" },
+    val: function() { return "some@emailaddr.moe" },
     click: function(f) {
-	// Fake event arg for click function. Add fields as needed.
-	const e = {
-	    preventDefault: function() {},
-	};
-	f(e);
+	f(dummyEvent);
     },
     scroll: function() {},
     ready: function() {},
@@ -1148,6 +1147,12 @@ var funcDict = {
         func(dummyEvent);
     },
     hide: function() {},
+    keypress: function() {},
+    animate: function() {},
+    show: function() {},
+    html: function() {},
+    focus: function() {},
+    text: function() {},
 };
 var jQuery = function(field){
     // Handle things like $(document) by just returning document.
