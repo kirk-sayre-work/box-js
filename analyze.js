@@ -438,8 +438,13 @@ function extractCode(code) {
             const commentPat2 = /\/\*\s*@cc_on *\r?\n(.+?)\r?\n@\*\//;
             codeMatch = code.match(commentPat2);
             if (!codeMatch) {
-                return code;
-            }
+		// //@cc_on ... @*/
+		const commentPat3 = /\/\/\s*@cc_on(.+?)@\*\//;
+		codeMatch = code.match(commentPat3);
+		if (!codeMatch) {
+                    return code;
+		}
+	    }
         }
     }
     var r = codeMatch[1];
