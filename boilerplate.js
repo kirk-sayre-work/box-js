@@ -411,8 +411,10 @@ function __makeFakeElem(data) {
             special: {},
         },
         innerHTML: data,
+	textContent: data,
         item: function() {},
         removeChild: function() {},
+	remove: function() {},
         cloneNode: func,
     };
     return fakeDict;
@@ -579,6 +581,7 @@ function __createElement(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },        
 	removeChild: function() {},
+	remove: function() {},
         "classList" : {
             add: function() {},
             remove: function() {},
@@ -688,6 +691,15 @@ var _generic_append_func = function(content) {
     }
     return "";
 };
+
+// Stubbed NodeIterator object that does nothing.
+function _getNodeIterator (root) {
+    const r = {
+	root: root,
+	nextNode: function() { return null; },
+    };
+    return r;
+}
 
 // Stubbed global document object.
 var document = {
@@ -834,7 +846,15 @@ var document = {
         logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
 	return document.getElementById(selectors);
     },
+    querySelectorAll: function(selectors) {
+        logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
+	return [document.getElementById(selectors)];
+    },    
     keypress: function() {},
+    createNodeIterator: function(root) {
+	return _getNodeIterator(root);
+    },
+    currentScript: __makeFakeElem(""),
 };
 
 // Stubbed out URL class.
@@ -1400,4 +1420,10 @@ var sessionStorage = {
 class URLSearchParams {
     constructor() {};
     get() {};
+}
+
+// Very stubbed NodeFilter "class".
+var NodeFilter = {
+    FILTER_ACCEPT: 1,
+    SHOW_COMMENT: 2,
 }
