@@ -1125,6 +1125,7 @@ var funcDict = {
 	f(dummyEvent);
     },
     scroll: function() {},
+    modal: function() {},
     ready: function() {},
     document: function() {},
     load: function() {},
