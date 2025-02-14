@@ -1067,6 +1067,11 @@ function makeWindowObject() {
 	    getData: function() {
 		return __currClipboardData;
 	    },
+            setData: function (typ, txt) {
+                logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
+	        __currClipboardData = txt;
+	        return __stubbed_then;
+            },
 	},
     };
 
