@@ -1073,6 +1073,7 @@ function makeWindowObject() {
 	        return __stubbed_then;
             },
 	},
+        frames: [],
     };
 
     return window;
