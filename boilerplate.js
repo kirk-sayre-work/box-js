@@ -389,6 +389,7 @@ function __makeFakeElem(data) {
         "parentNode" : {
             "appendChild" : func,
             "insertBefore" : func,
+            removeChild: function () {},
         },
         "getElementsByTagName" : __getElementsByTagName,
         "title" : "My Fake Title",
@@ -590,7 +591,11 @@ function __createElement(tag) {
             // list. May need a flag to control this.
             contains: function(x) { return false; },
             special: {},
-        },        
+        },
+        sheet: {
+            insertRule: function() {},
+        },
+        isVisible: function() { return true; },
     };
     return fake_elem;
 };
@@ -1272,6 +1277,7 @@ var N2R = N2D = function() {};
 // No Element class in node-js.
 class Element {
     constructor() {};
+    prototype() { return {}; };
 };
 
 class _WidgetInfo {
@@ -1295,6 +1301,7 @@ if (WScript.name != "node") {
 function setTimeout(func, time) {
     if (!(typeof(func) === "function")) return;
     func();
+    return func;
 };
 function clearTimeout() {};
 function setInterval(func, val) {
