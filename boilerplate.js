@@ -1441,3 +1441,6 @@ var NodeFilter = {
     FILTER_ACCEPT: 1,
     SHOW_COMMENT: 2,
 }
+
+function moveTo() {};
+function resizeTo() {};
