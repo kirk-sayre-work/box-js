@@ -1011,7 +1011,9 @@ const sandbox = {
     logUrl: lib.logUrl,
     ActiveXObject,
     dom,
-    alert: (x) => {},
+    alert: (x) => {
+        lib.info("Displayed alert(" + x + ")");
+    },
     InstallProduct: (x) => {
         lib.logUrl("InstallProduct", x);
     },
