@@ -57,6 +57,7 @@ const dummyEvent = {
         };
     },
 };
+event = dummyEvent;
 
 // Handle Blobs. All Blob methods in the real Blob class for dumping
 // the data in a Blob are asynch and box-js is all synchronous, so
