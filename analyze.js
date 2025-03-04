@@ -438,8 +438,13 @@ function extractCode(code) {
             const commentPat2 = /\/\*\s*@cc_on *\r?\n(.+?)\r?\n@\*\//;
             codeMatch = code.match(commentPat2);
             if (!codeMatch) {
-                return code;
-            }
+		// //@cc_on ... @*/
+		const commentPat3 = /\/\/\s*@cc_on(.+?)@\*\//;
+		codeMatch = code.match(commentPat3);
+		if (!codeMatch) {
+                    return code;
+		}
+	    }
         }
     }
     var r = codeMatch[1];
@@ -1006,7 +1011,9 @@ const sandbox = {
     logUrl: lib.logUrl,
     ActiveXObject,
     dom,
-    alert: (x) => {},
+    alert: (x) => {
+        lib.info("Displayed alert(" + x + ")");
+    },
     InstallProduct: (x) => {
         lib.logUrl("InstallProduct", x);
     },
@@ -1020,6 +1027,7 @@ const sandbox = {
                 lib.logIOC("PayloadExec", x, "The script executed JS returned from a C2 server.");
             }
         },
+	clear: function() {},
     },
     Enumerator: require("./emulator/Enumerator"),
     GetObject: require("./emulator/WMI").GetObject,

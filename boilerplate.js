@@ -57,6 +57,7 @@ const dummyEvent = {
         };
     },
 };
+event = dummyEvent;
 
 // Handle Blobs. All Blob methods in the real Blob class for dumping
 // the data in a Blob are asynch and box-js is all synchronous, so
@@ -331,9 +332,11 @@ var location = {
     get hash() {
         // Return a fake fragment ID if location is not set.
         if (typeof(this._href) === "undefined") {
-            return '#eyAiZW1haWwiIDogInZpY3RpbUBwbGVhc2UucGhpc2gubWUiIH0K';
+            var r = '#foo@bar.baz';
+            return r;
         };
         // Return the actual fragment ID if we have one.
+        console.log(this._href);
         const i = this._href.indexOf("#");
         var r = "";
         if (i >= 0) r = this._href.slice(i);
@@ -387,6 +390,7 @@ function __makeFakeElem(data) {
         "parentNode" : {
             "appendChild" : func,
             "insertBefore" : func,
+            removeChild: function () {},
         },
         "getElementsByTagName" : __getElementsByTagName,
         "title" : "My Fake Title",
@@ -409,8 +413,10 @@ function __makeFakeElem(data) {
             special: {},
         },
         innerHTML: data,
+	textContent: data,
         item: function() {},
         removeChild: function() {},
+	remove: function() {},
         cloneNode: func,
     };
     return fakeDict;
@@ -428,7 +434,7 @@ function __getElementsByTagName(tag) {
         return r;
     }
     else {
-        return [__makeFakeElem("")];
+        return [__makeFakeElem(""), __makeFakeElem(""), __makeFakeElem("")];
     }
 };
 
@@ -478,7 +484,9 @@ function __createElement(tag) {
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
-	style: [],
+	style: {
+	    setProperty: function() {},
+	},
 	appendChild: function() {
             return __createElement("__append__");
         },
@@ -575,6 +583,7 @@ function __createElement(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },        
 	removeChild: function() {},
+	remove: function() {},
         "classList" : {
             add: function() {},
             remove: function() {},
@@ -583,11 +592,27 @@ function __createElement(tag) {
             // list. May need a flag to control this.
             contains: function(x) { return false; },
             special: {},
-        },        
+        },
+        sheet: {
+            insertRule: function() {},
+        },
+        isVisible: function() { return true; },
     };
     return fake_elem;
 };
 __fakeParentElem = __createElement("FakeParentElem");
+
+// Fake up the then() method. This dict can be returned by methods
+// that use the a.b().then() pattern. All this does is call the
+// function passed to the then().
+const __stubbed_then = {
+    then: function(f) {
+	f();
+    },
+}
+
+// Track the current text in the clipboard.
+var __currClipboardData = "";
 
 // Stubbed global navigator object.
 const navigator = {
@@ -595,6 +620,8 @@ const navigator = {
     clipboard: {
         writeText : function(txt) {
             logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
+	    __currClipboardData = txt;
+	    return __stubbed_then;
         },
     },
     connection: {
@@ -671,6 +698,15 @@ var _generic_append_func = function(content) {
     return "";
 };
 
+// Stubbed NodeIterator object that does nothing.
+function _getNodeIterator (root) {
+    const r = {
+	root: root,
+	nextNode: function() { return null; },
+    };
+    return r;
+}
+
 // Stubbed global document object.
 var document = {
     documentMode: 8, // Fake running in IE8
@@ -703,6 +739,7 @@ var document = {
     execCommand : function(cmd) {
         if ((cmd == "copy") && (typeof(__currSelectedVal) !== "undefined")) {
             logIOC('Clipboard', __currSelectedVal, "The script pasted text into the clipboard.");
+	    __currClipboardData = __currSelectedVal;
         }
     },
     getElementById : function(id) {
@@ -756,6 +793,7 @@ var document = {
         var r = __createElement(id);
         r.val = jqueryVals[id];
         if (typeof(r.val) == "undefined") r.val = "";
+	r.prepend = function() {};
         return r;
     },
     documentElement: {
@@ -814,6 +852,15 @@ var document = {
         logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
 	return document.getElementById(selectors);
     },
+    querySelectorAll: function(selectors) {
+        logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
+	return [document.getElementById(selectors)];
+    },    
+    keypress: function() {},
+    createNodeIterator: function(root) {
+	return _getNodeIterator(root);
+    },
+    currentScript: __makeFakeElem(""),
 };
 
 // Stubbed out URL class.
@@ -1024,6 +1071,17 @@ function makeWindowObject() {
 	    logUrl('MAIL_URL Location', url);
         },
         XMLHttpRequest: XMLHttpRequest,
+	clipboardData: {
+	    getData: function() {
+		return __currClipboardData;
+	    },
+            setData: function (typ, txt) {
+                logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
+	        __currClipboardData = txt;
+	        return __stubbed_then;
+            },
+	},
+        frames: [],
     };
 
     return window;
@@ -1076,15 +1134,12 @@ function adjustIframes() {};
 // Function form of jQuery().
 var funcDict = {
     on: function(){ return funcDict },
-    val: function() {},
+    val: function() { return "some@emailaddr.moe" },
     click: function(f) {
-	// Fake event arg for click function. Add fields as needed.
-	const e = {
-	    preventDefault: function() {},
-	};
-	f(e);
+	f(dummyEvent);
     },
     scroll: function() {},
+    modal: function() {},
     ready: function() {},
     document: function() {},
     load: function() {},
@@ -1123,6 +1178,16 @@ var funcDict = {
     width: function() {},
     resize: function() {},
     blur: function() {},
+    submit: function(func) {
+        func(dummyEvent);
+    },
+    hide: function() {},
+    keypress: function() {},
+    animate: function() {},
+    show: function() {},
+    html: function() {},
+    focus: function() {},
+    text: function() {},
 };
 var jQuery = function(field){
     // Handle things like $(document) by just returning document.
@@ -1163,6 +1228,12 @@ jQuery.support = {
 };
 jQuery.boxModel = false;
 jQuery.ajaxSetup = function() {};
+jQuery.ajax = function(params) {
+    const url = params["url"];
+    if (typeof(url) == "undefined") return;
+    logIOC('AJAX', {url}, "The script used $.ajax() to hit a URL.");
+    logUrl('AJAX', url);    
+};
 jQuery.event = {
     add: function() {},
     remove: function() {},
@@ -1174,7 +1245,10 @@ jQuery.isFunction = function() {};
 jQuery.expr = {
     pseudos: {},
 };
-
+jQuery.getJSON = function(url) {
+    logIOC('JQuery.getJSON()', {url}, "The script called JQuery.getJSON()");
+    logUrl('JQuery.getJSON()', url);
+};
 // Looks like that can be a window field.
 window.jQuery = jQuery
 
@@ -1206,6 +1280,7 @@ var N2R = N2D = function() {};
 // No Element class in node-js.
 class Element {
     constructor() {};
+    prototype() { return {}; };
 };
 
 class _WidgetInfo {
@@ -1229,6 +1304,7 @@ if (WScript.name != "node") {
 function setTimeout(func, time) {
     if (!(typeof(func) === "function")) return;
     func();
+    return func;
 };
 function clearTimeout() {};
 function setInterval(func, val) {
@@ -1250,6 +1326,12 @@ function fetch(url, data) {
     return {
 	ok : true,
 	json : function() { return "1"; },
+	then: function(f) {
+	    f();
+	    return {
+		catch: function() {},
+	    };
+	},
     };
 };
 
@@ -1350,3 +1432,18 @@ var sessionStorage = {
     getItem: function() {},
     setItem: function() {},
 };
+
+// Stubbed URLSearchParams class.
+class URLSearchParams {
+    constructor() {};
+    get() {};
+}
+
+// Very stubbed NodeFilter "class".
+var NodeFilter = {
+    FILTER_ACCEPT: 1,
+    SHOW_COMMENT: 2,
+}
+
+function moveTo() {};
+function resizeTo() {};
