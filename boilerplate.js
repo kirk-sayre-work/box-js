@@ -413,7 +413,15 @@ function __makeFakeElem(data) {
             special: {},
         },
         innerHTML: data,
-	textContent: data,
+	_textContent: data,
+        get textContent() {
+            if (typeof(this._textContent) === "undefined") this._textContent = '';
+            return this._textContent;
+        },
+        set textContent(d) {
+            this._textContent = d;
+            logIOC('Element Text', {textContent}, "The script changed textContent of an element.");
+        },
         item: function() {},
         removeChild: function() {},
 	remove: function() {},
@@ -597,6 +605,15 @@ function __createElement(tag) {
             insertRule: function() {},
         },
         isVisible: function() { return true; },
+        _textContent: '',
+        get textContent() {
+            if (typeof(this._textContent) === "undefined") this._textContent = '';
+            return this._textContent;
+        },
+        set textContent(d) {
+            this._textContent = d;
+            logIOC('Element Text', {d}, "The script changed textContent of an element.");
+        },
     };
     return fake_elem;
 };
