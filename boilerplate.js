@@ -553,7 +553,15 @@ function __createElement(tag) {
         toLowerCase: function() {
             return "// NOPE";
         },
-        onclick: undefined,
+        _onclick: undefined,
+        set onclick(func) {
+            this._onclick = func;
+            // Call the click handler.
+            func();
+        },
+        get onclick() {
+            return this._onclick;
+        },
         click: function() {
             lib.info("click() method called on a document element.");
             if (typeof(this.onclick) !== "undefined") this.onclick();
