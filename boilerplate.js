@@ -623,6 +623,9 @@ function __createElement(tag) {
             logIOC('Element Text', {d}, "The script changed textContent of an element.");
         },
     };
+    fake_elem["contentWindow"] = {
+        document: document,
+    };
     return fake_elem;
 };
 __fakeParentElem = __createElement("FakeParentElem");
@@ -886,6 +889,10 @@ var document = {
 	return _getNodeIterator(root);
     },
     currentScript: __makeFakeElem(""),
+    open: function() {
+        return this;
+    },
+    close: function() {},
 };
 
 // Stubbed out URL class.
@@ -1116,7 +1123,14 @@ self = window;
 window.parent = makeWindowObject();
 download = window;
 const _localStorage = {
-    getItem: function(x) {return null},
+    getItem: function(x) {
+        // Can access localStorage with a URL (does not seem local but whatever).
+        if (x.startsWith("http://") || x.startsWith("https://")) {
+            logIOC('localStorage', {x}, "The script accessed a URL with localStorage.getItem().");
+	    logUrl('localStorage', x);
+        }
+        return null
+    },
     setItem: function(x,y) {},
 };
 window.localStorage = _localStorage;
