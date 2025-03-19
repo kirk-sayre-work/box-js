@@ -943,6 +943,7 @@ var wscript_proxy = new Proxy({
     path: "C:\\TestFolder\\",
     scriptfullname: sampleFullName,
     scriptname: sampleName,
+    timeout: 0,
     quit: function() {        
         lib.logIOC("WScript", "Quit()", "The sample explicitly called WScript.Quit().");
         //console.trace()
