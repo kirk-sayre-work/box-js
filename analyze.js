@@ -1255,6 +1255,10 @@ function ActiveXObject(name) {
         return require("./emulator/WScriptShell");
     case "wbemscripting.swbemlocator":
         return require("./emulator/WBEMScriptingSWBEMLocator");
+    case "wbemscripting.swbemdatetime":
+        return require("./emulator/WBEMScriptingSWbemDateTime");
+    case "wbemscripting.swbemnamedvalueset":
+        return require("./emulator/WBEMScriptingSWbemNamedValueSet");
     case "msscriptcontrol.scriptcontrol":
         return require("./emulator/MSScriptControlScriptControl");
     case "schedule.service":
