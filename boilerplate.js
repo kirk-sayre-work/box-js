@@ -255,7 +255,7 @@ function extractJSFromHTA(s) {
     return r;
 }
 
-var location = {
+var __location = {
     
     /*
       Location.ancestorOrigins
@@ -277,10 +277,14 @@ var location = {
         return this._href;
     },
     set href(url) {
-	url = url.replace(/\r?\n/g, "");
-        this._href = url;
-        logIOC('HREF Location', {url}, "The script changed location.href.");
-	logUrl('HREF Location', url);
+	if (url) {
+	    url = "" + url;
+	    url = url.replace(/\r?\n/g, "");
+	    if (url.startsWith("file:")) return;
+            this._href = url;
+            logIOC('HREF Location', {url}, "The script changed location.href.");
+	    logUrl('HREF Location', url);
+	}
     },
 
     /* 
@@ -336,7 +340,6 @@ var location = {
             return r;
         };
         // Return the actual fragment ID if we have one.
-        console.log(this._href);
         const i = this._href.indexOf("#");
         var r = "";
         if (i >= 0) r = this._href.slice(i);
@@ -366,6 +369,23 @@ var location = {
         return "file:///C:\Users\User\AppData\Roaming\CURRENT_SCRIPT_IN_FAKED_DIR.js"
     },
 };
+
+// Track setting the current HREF by direct assignments to location.
+Object.defineProperty(Object.prototype, "__define", {
+    value: function(name, descriptor){
+        Object.defineProperty(this, name, descriptor);
+    }
+});
+
+__define("location",
+       {
+	   get: function() { return __location; },
+	   set: function(url) {
+	       if (url) {
+		   __location.href = url;
+	       }
+	   },
+       });
 
 tagNameMap = {
     /* !! ADD TAG TO VALUE MAPPINGS HERE !! */
@@ -425,6 +445,12 @@ function __makeFakeElem(data) {
         item: function() {},
         removeChild: function() {},
 	remove: function() {},
+        append: function() {
+            return __createElement("__append__");
+        },
+	prepend: function() {
+            return __createElement("__prepend__");
+        },	
         cloneNode: func,
     };
     return fakeDict;
@@ -450,6 +476,7 @@ var __currSelectedVal = undefined;
 var __fakeParentElem = undefined;
 function __createElement(tag) {
     var fake_elem = {
+	myType: "Element",
         set src(url) {
 
             // Looks like you can leave off the http from the url.
@@ -484,10 +511,12 @@ function __createElement(tag) {
             return this._href;
         },
         set href(url) {
-	    url = url.replace(/\r?\n/g, "");
-            this._href = url;
-            logIOC('HREF Location', {url}, "The script changed location.href.");
-	    logUrl('HREF Location', url);
+	    if (url) {
+		url = url.replace(/\r?\n/g, "");
+		this._href = url;
+		logIOC('HREF Location', {url}, "The script changed location.href.");
+		logUrl('HREF Location', url);
+	    }
         },
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
@@ -500,6 +529,9 @@ function __createElement(tag) {
         },
         append: function() {
             return __createElement("__append__");
+        },
+	prepend: function() {
+            return __createElement("__prepend__");
         },
         attributes: {},
         setAttribute: function(name, val) {
@@ -1021,6 +1053,7 @@ function makeWindowObject() {
             logIOC('Window Parking', val, "The script changed window.park.");
         },        
         eval: function(cmd) { return eval(cmd); },
+	btoa: btoa,
         resizeTo: function(a,b){},
         moveTo: function(a,b){},
         open: function(url) {
@@ -1035,7 +1068,8 @@ function makeWindowObject() {
         atob: function(s){
             return atob(s);
         },
-        setTimeout: function(f, i) {},
+        setTimeout: function(f, i) {
+	},
         Date: Date,
         addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
