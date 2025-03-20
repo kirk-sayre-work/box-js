@@ -98,6 +98,11 @@
             "description": "Fake that HTTP requests work and have them return a fake payload"
         },
         {
+            "name": "fake-reg-read",
+            "type": "Boolean",
+            "description": "Return fake values for registry reads of keys that are unknown to box-js."
+        },
+        {
             "name": "no-kill",
             "type": "Boolean",
             "description": "Do not kill the application when runtime errors occur"
