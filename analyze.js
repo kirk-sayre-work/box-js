@@ -269,7 +269,7 @@ function hideStrs(s) {
             // ex. var f=/[!"#$%&'()*+,/\\:;<=>?@[\]^`{|}~]/g;
             if (!justStartedRegex &&
                 !inSquareBrackets &&
-                (prevChar == "/") && (prevPrevChar != "\\") &&
+                (prevChar == "/") &&
                 ((slashSubstr.length % 2) == 0) &&
                 ("\\:[]?".indexOf(currChar) == -1)) {
                 inRegex = false;
