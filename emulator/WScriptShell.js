@@ -149,6 +149,8 @@ function WScriptShell() {
 		currRegEntry = currRegEntry[foundKey[0]]
 	    }
 	    else {
+                // Return a fake value so all registry reads succeed?
+                if (argv["fake-reg-read"]) return "FAKE_REG_VALUE";
 		return undefined
 	    }
 	}

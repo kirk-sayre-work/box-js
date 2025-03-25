@@ -269,7 +269,7 @@ function hideStrs(s) {
             // ex. var f=/[!"#$%&'()*+,/\\:;<=>?@[\]^`{|}~]/g;
             if (!justStartedRegex &&
                 !inSquareBrackets &&
-                (prevChar == "/") && (prevPrevChar != "\\") &&
+                (prevChar == "/") &&
                 ((slashSubstr.length % 2) == 0) &&
                 ("\\:[]?".indexOf(currChar) == -1)) {
                 inRegex = false;
@@ -943,6 +943,7 @@ var wscript_proxy = new Proxy({
     path: "C:\\TestFolder\\",
     scriptfullname: sampleFullName,
     scriptname: sampleName,
+    timeout: 0,
     quit: function() {        
         lib.logIOC("WScript", "Quit()", "The sample explicitly called WScript.Quit().");
         //console.trace()
@@ -1281,6 +1282,10 @@ function ActiveXObject(name) {
         return require("./emulator/WScriptShell");
     case "wbemscripting.swbemlocator":
         return require("./emulator/WBEMScriptingSWBEMLocator");
+    case "wbemscripting.swbemdatetime":
+        return require("./emulator/WBEMScriptingSWbemDateTime");
+    case "wbemscripting.swbemnamedvalueset":
+        return require("./emulator/WBEMScriptingSWbemNamedValueSet");
     case "msscriptcontrol.scriptcontrol":
         return require("./emulator/MSScriptControlScriptControl");
     case "schedule.service":
