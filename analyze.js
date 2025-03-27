@@ -41,7 +41,7 @@ if (argv.encoding) {
         lib.warning("jschardet (v" + require("jschardet/package.json").version + ") couldn't detect encoding, using UTF-8");
         encoding = "utf8";
     } else {
-        lib.debug("jschardet (v" + require("jschardet/package.json").version + ") detected encoding " + encoding);
+        lib.warning("jschardet (v" + require("jschardet/package.json").version + ") detected encoding " + encoding);
     }
 }
 
@@ -1062,8 +1062,35 @@ const sandbox = {
     _typeof: (x) => x.typeof ? x.typeof : typeof x,
     WScript: wscript_proxy,
     WSH: wscript_proxy,
+    decodeURIComponent: (x) => {
+       out = decodeURIComponent(x)
+       if (argv["decode-uri-component-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("decodeURIComponent",{out}, `decodeURIComponent Output`);
+          }
+	}
+        return out
+    },
+    unescape: (x) => {
+       out = unescape(x)
+       if (argv["decode-unescape-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("unescape",{out}, `unescape Output`);
+          }
+        }
+        return out
+    },	
+    decodeURI: (x) => {
+       out = decodeURI(x)
+       if (argv["decode-uri-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("decodeURI",{out}, `decodeURI Output`);
+          }
+        }
+        return out
+    },
     self: {},
-    require
+    require	
 };
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088

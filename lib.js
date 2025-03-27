@@ -15,7 +15,7 @@ const snippets = {};
 const resources = {};
 const files = {};
 const IOC = [];
-
+const decode_strings = [];
 let latestUrl = "";
 
 const logSnippet = function(filename, logContent, content) {
@@ -57,7 +57,7 @@ function log(tag, text, toFile = true, toStdout = true) {
     if (toFile || argv.loglevel === "debug")
 	fs.appendFileSync(path.join(directory, "analysis.log"), message + "\n");
 }
-
+    
 function hash(algo, string) {
     return crypto.createHash(algo).update(string).digest("hex");
 }
@@ -66,8 +66,33 @@ const getUUID = uuid.v4;
 
 function logIOC(type, value, description) {
     log("info", "IOC: " + description);
-    IOC.push({type, value, description});
-    fs.writeFileSync(path.join(directory, "IOC.json"), JSON.stringify(IOC, null, "\t"));
+    if (type === "decodeURIComponent"){
+        if (decode_strings.indexOf(value.out) === -1){
+	    console.log(decode_strings)
+	    decode_strings.push(value.out);
+            IOC.push({type, value, description});
+            fs.writeFileSync(path.join(directory, "IOC.json"), JSON.stringify(IOC, null, "\t"));
+	}
+   if(type === "unescape"){
+        if (decode_strings.indexOf(value.out) === -1){
+            console.log(decode_strings)
+            decode_strings.push(value.out);
+            IOC.push({type, value, description});
+            fs.writeFileSync(path.join(directory, "IOC.json"), JSON.stringify(IOC, null, "\t"));
+        }	   
+   }
+   if(type === "decodeURI"){
+        if (decode_strings.indexOf(value.out) === -1){
+            console.log(decode_strings)
+            decode_strings.push(value.out);
+            IOC.push({type, value, description});
+            fs.writeFileSync(path.join(directory, "IOC.json"), JSON.stringify(IOC, null, "\t"));
+        } 
+   }	    
+    }else{
+        IOC.push({type, value, description});
+        fs.writeFileSync(path.join(directory, "IOC.json"), JSON.stringify(IOC, null, "\t"));
+    }
 }
 
 function logUrl(method, url) {
