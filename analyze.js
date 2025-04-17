@@ -865,10 +865,15 @@ if (argv["fake-script-engine"]) {
 }
 var fakeEngineFull = "C:\\WINDOWS\\system32\\" + fakeEngineShort;
 
-// Fake command line options can be set with the --fake-cl-args option.
+// Fake command line options can be set with the --fake-cl-args
+// option. "''" is an empty string argument.
 var commandLineArgs = [];
 if (argv["fake-cl-args"]) {
-    commandLineArgs = argv["fake-cl-args"].split(",");
+    const tmpArgs = argv["fake-cl-args"].split(",");
+    for (var arg of tmpArgs) {
+        if (arg == "''") arg = "";
+        commandLineArgs.push(arg);
+    }
 }
 
 // Fake sample file name can be set with the --fake-sample-name option.
