@@ -1372,8 +1372,16 @@ if (WScript.name != "node") {
     };
 };
 
+timeoutFuncs = []
 function setTimeout(func, time) {
     if (!(typeof(func) === "function")) return;
+    // No recursive loops.
+    const funcStr = ("" + func);
+    if (timeoutFuncs.indexOf(funcStr) != -1) {
+        console.log("Recursive setTimeout() loop detected. Breaking loop.")
+        return func;
+    }
+    timeoutFuncs.push(funcStr);
     func();
     return func;
 };
@@ -1518,3 +1526,35 @@ var NodeFilter = {
 
 function moveTo() {};
 function resizeTo() {};
+
+// Stubbed JWPlayer (video player) support.
+// https://jwplayer.com/
+function jwplayer(arg) {
+
+    // Constructor?
+    if (typeof(arg) !== "undefined") {
+        
+        // Return a fake JWPlayer object.
+        return {
+            setup: function() {},
+            on: function(event, func) {
+                func();
+            },
+            remove: function() {},
+        };
+    }
+
+    // Maybe static methods?
+    return {
+        getPosition: function () {
+            return 100.0;
+        },
+        getDuration: function () {
+            return 100.0;
+        },
+        getState: function () {
+            return "idle";
+        },
+        play: function () {},
+    }
+}
