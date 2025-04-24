@@ -1,6 +1,12 @@
 const parse = require("node-html-parser").parse;
 const lib = require("./lib.js");
 
+// Save event listener functions. Event listener callbacks may change
+// the state of the DOM and exhibit different functionality when
+// called again, so save the callback functions so we can call them
+// multiple times.
+const listenerCallbacks = [];
+
 // Dummy event to use for faked event handler calls.
 const dummyEvent = {
 
@@ -35,7 +41,9 @@ const dummyEvent = {
 
     // A reference to the object to which the event was originally
     // dispatched.
-    target: "??",
+    target: {
+        closest: function() { return false; },
+    },
 
     // The time at which the event was created (in milliseconds). By
     // specification, this value is time since epoch—but in reality,
@@ -422,6 +430,7 @@ function __makeFakeElem(data) {
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
+            listenerCallbacks.push(func);
         },
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -474,6 +483,7 @@ function __getElementsByTagName(tag) {
 
 var __currSelectedVal = undefined;
 var __fakeParentElem = undefined;
+var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
 	myType: "Element",
@@ -523,6 +533,7 @@ function __createElement(tag) {
         log: [],
 	style: {
 	    setProperty: function() {},
+            display: "",
 	},
 	appendChild: function() {
             return __createElement("__append__");
@@ -616,6 +627,23 @@ function __createElement(tag) {
                     logUrl('Action Attribute', url);
                 };
             }
+
+            // Pull out onclick JS and run it.
+            const clickHandlers = pullClickHandlers(content);
+            if (clickHandlers.length > 0) {
+                lib.info("onclick handler code provided in dynamically added HTML.");
+                for (const handler of clickHandlers) {
+
+                    // Do a direct run of the onclick code.
+                    console.log(handler);
+                    eval(handler);
+
+                    // Save the onclick handler code snippets so we can
+                    // run them again at the end in case the DOM has
+                    // changed.
+                    dynamicOnclickHandlers.push(handler);
+                }
+            }
         },
         get innerHTML() {
             if (typeof(this._innerHTML) === "undefined") this._innerHTML = "";
@@ -626,6 +654,7 @@ function __createElement(tag) {
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
+            listenerCallbacks.push(func);
         },
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -654,6 +683,7 @@ function __createElement(tag) {
             this._textContent = d;
             logIOC('Element Text', {d}, "The script changed textContent of an element.");
         },
+        focus: function() {},
     };
     fake_elem["contentWindow"] = {
         document: document,
@@ -768,6 +798,7 @@ function _getNodeIterator (root) {
 }
 
 // Stubbed global document object.
+generatedElements = {};
 var document = {
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
@@ -849,11 +880,15 @@ var document = {
             
         }
 
+        // Have we already made a fake element for this ID?
+        if (typeof(generatedElements[id]) !== "undefined") return generatedElements[id];
+        
         // got nothing to return. Make up some fake element and hope for the best.
         var r = __createElement(id);
         r.val = jqueryVals[id];
-        if (typeof(r.val) == "undefined") r.val = "";
+        if (typeof(r.val) == "undefined") r.val = "legituser@mylegitdomain.com";
 	r.prepend = function() {};
+        generatedElements[id] = r;
         return r;
     },
     documentElement: {
@@ -900,6 +935,7 @@ var document = {
         // Simulate the event happing by running the function.
         logIOC("Document.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
         func(dummyEvent);
+        listenerCallbacks.push(func);
     },
     removeEventListener: function(tag) {
         logIOC("Document.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -1015,6 +1051,7 @@ class XMLHttpRequest {
         // Simulate the event happing by running the function.
         logIOC("XMLHttpRequest.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
         func(dummyEvent);
+        listenerCallbacks.push(func);
     };
 
     removeEventListener(tag) {
@@ -1076,6 +1113,7 @@ function makeWindowObject() {
             // Simulate the event happing by running the function.
             logIOC("Window.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
+            listenerCallbacks.push(func);
         },
         removeEventListener: function(tag) {
             logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -1372,16 +1410,17 @@ if (WScript.name != "node") {
     };
 };
 
-timeoutFuncs = []
+timeoutFuncs = {}
 function setTimeout(func, time) {
     if (!(typeof(func) === "function")) return;
     // No recursive loops.
     const funcStr = ("" + func);
-    if (timeoutFuncs.indexOf(funcStr) != -1) {
+    if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
+    if (timeoutFuncs[funcStr] > 2) {
         console.log("Recursive setTimeout() loop detected. Breaking loop.")
         return func;
     }
-    timeoutFuncs.push(funcStr);
+    timeoutFuncs[funcStr]++;
     func();
     return func;
 };
@@ -1402,16 +1441,14 @@ var exports = {};
 function fetch(url, data) {
     lib.logIOC("fetch", {url: url, data: data}, "The script fetch()ed a URL.");
     lib.logUrl("fetch", url);
-    return {
+    const r = {
 	ok : true,
 	json : function() { return "1"; },
-	then: function(f) {
-	    f();
-	    return {
-		catch: function() {},
-	    };
-	},
     };
+    const p = new Promise((resolve, reject) => {
+        resolve(r);
+    });
+    return p;
 };
 
 // Image class stub.
@@ -1449,6 +1486,26 @@ function pullActionUrls(html) {
     return r;
 }
 
+// Pull JS from onclick="" HTML element attributes.
+function pullClickHandlers(html) {
+
+    // Sanity check.
+    if ((typeof(html) == "undefined") || (typeof(html.match) == "undefined")) return [];
+    
+    // Do we have action attributes?
+    const actPat = /onclick\s*=\s*"([^"]+)"/g;
+    const r = [];
+    for (const match of html.matchAll(actPat)) {
+        var currAct = match[1];
+        if (currAct == "//null") continue;
+        r.push(currAct);
+    }
+
+    // Done.
+    return r;
+}
+
+
 // Stubbing for chrome object. Currently does very little.
 const chrome = {
 
@@ -1479,6 +1536,7 @@ mediaContainer = {
 
 function addEventListener(event, func) {
     func(dummyEvent);
+    listenerCallbacks.push(func);
 }
 
 if (typeof(arguments) === "undefined") {
@@ -1516,6 +1574,7 @@ var sessionStorage = {
 class URLSearchParams {
     constructor() {};
     get() {};
+    append() {};
 }
 
 // Very stubbed NodeFilter "class".
@@ -1557,4 +1616,9 @@ function jwplayer(arg) {
         },
         play: function () {},
     }
+}
+
+// Stubbed performance object.
+performance = {
+    now: function() { return 51151.43; },
 }

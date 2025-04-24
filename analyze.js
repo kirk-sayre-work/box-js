@@ -1101,6 +1101,16 @@ if (argv["dangerous-vm"]) {
     // Run the document.body.onload() function if defined to simulate
     // document loading.
     code += "\nif ((typeof(document) != 'undefined') && (typeof(document.body) != 'undefined') && (typeof(document.body.onload) != 'undefined')) document.body.onload();\n"
+
+    // Run all of the collected onclick handler code snippets pulled
+    // from dynamically added HTML.
+    code += "\nfor (const handler of dynamicOnclickHandlers) {\neval(handler);\n}\n"
+    
+    // Run all of the collected event listener callback functions 1
+    // more time after the original code has executed in case the DOM
+    // has changed and a callback changes its behavior based on the
+    // DOM contents.
+    code += "\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n"
     
     try{
         vm.run(code);
