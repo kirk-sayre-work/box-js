@@ -1104,7 +1104,7 @@ if (argv["dangerous-vm"]) {
 
     // Run all of the collected onclick handler code snippets pulled
     // from dynamically added HTML.
-    code += "\nfor (const handler of dynamicOnclickHandlers) {\neval(handler);\n}\n"
+    code += "\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e);\n}\n}\n"
     
     // Run all of the collected event listener callback functions 1
     // more time after the original code has executed in case the DOM

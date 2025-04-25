@@ -621,6 +621,8 @@ function __createElement(tag) {
         set innerHTML(content) {
             this._innerHTML = content;
             logIOC("Set innerHTML", {content}, "The script set the innerHTML of an element.");
+
+            // Pull action attribute URLs.
             const urls = pullActionUrls(content);
             if (typeof(urls) !== "undefined") {
                 for (const url of urls) {
@@ -628,7 +630,7 @@ function __createElement(tag) {
                 };
             }
 
-            // Pull out onclick JS and run it.
+            // Pull out onclick JS and run it (eventually).
             const clickHandlers = pullClickHandlers(content);
             if (clickHandlers.length > 0) {
                 lib.info("onclick handler code provided in dynamically added HTML.");
@@ -958,6 +960,7 @@ var document = {
     },
     close: function() {},
 };
+document.documentElement = document;
 
 // Stubbed out URL class.
 class URL {
@@ -1618,3 +1621,35 @@ function jwplayer(arg) {
 performance = {
     now: function() { return 51151.43; },
 }
+
+// (Very) stubbed DOMParser class.
+class DOMParser {
+
+    parseFromString(content) {
+        logIOC("DOMParser", {content}, "DOMParser.parseFromString() called.");
+
+        // Pull action attribute URLs.
+        const urls = pullActionUrls(content);
+        if (typeof(urls) !== "undefined") {
+            for (const url of urls) {
+                logUrl('Action Attribute', url);
+            };
+        }
+        
+        // Pull out onclick JS and run it (eventually).
+        const clickHandlers = pullClickHandlers(content);
+        if (clickHandlers.length > 0) {
+            lib.info("onclick handler code provided in parsed HTML.");
+            for (const handler of clickHandlers) {
+                
+                // Save the onclick handler code snippets so we can
+                // run them again at the end in case the DOM has
+                // changed.
+                dynamicOnclickHandlers.push(handler);
+            }
+        }
+
+        // Return a fake "parsed" element.
+        return document;
+    };
+};
