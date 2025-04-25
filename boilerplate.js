@@ -634,10 +634,6 @@ function __createElement(tag) {
                 lib.info("onclick handler code provided in dynamically added HTML.");
                 for (const handler of clickHandlers) {
 
-                    // Do a direct run of the onclick code.
-                    console.log(handler);
-                    eval(handler);
-
                     // Save the onclick handler code snippets so we can
                     // run them again at the end in case the DOM has
                     // changed.
