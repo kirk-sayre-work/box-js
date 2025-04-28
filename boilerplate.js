@@ -863,6 +863,7 @@ var document = {
                     r.attrs = attrs[i];
                     this.elementCache[id] = r;
                     r.val = jqueryVals[id];
+                    if ((typeof(r.val) == "undefined") || (r.val == "")) r.val = "legituser@mylegitdomain.com";
                     return r;                    
                 }
             }
@@ -872,6 +873,7 @@ var document = {
 		if ((attrs[i].class === id) || ((attrs[i].id === id))) {
                     var r = __createElement(id);
                     r.value = attrs[i].value;
+                    if ((typeof(r.value) == "undefined") || (r.value == "")) r.value = "legituser@mylegitdomain.com";
 		    return r;
 		}
 	    }
