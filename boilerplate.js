@@ -1,5 +1,8 @@
 const parse = require("node-html-parser").parse;
 const lib = require("./lib.js");
+const nodeCrypto = require('crypto').webcrypto;
+const nodeUtil = require('util');
+const { Buffer } = require('node:buffer');
 
 // Save event listener functions. Event listener callbacks may change
 // the state of the DOM and exhibit different functionality when
@@ -1185,6 +1188,7 @@ function makeWindowObject() {
             },
 	},
         frames: [],
+        crypto: nodeCrypto,
     };
 
     return window;
@@ -1682,3 +1686,10 @@ function callDynamicHandlers() {
         }
     }
 }
+
+// Treat console.warn like console.log.
+console.warn = console.log;
+
+// TextEncoder support.
+const TextEncoder = nodeUtil.TextEncoder;
+const TextDecoder = nodeUtil.TextDecoder;
