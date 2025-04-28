@@ -1104,13 +1104,13 @@ if (argv["dangerous-vm"]) {
 
     // Run all of the collected onclick handler code snippets pulled
     // from dynamically added HTML.
-    code += "\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e);\nconsole.log(handler);\n}\n}\n"
+    code += "\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
     
     // Run all of the collected event listener callback functions 1
     // more time after the original code has executed in case the DOM
     // has changed and a callback changes its behavior based on the
     // DOM contents.
-    code += "\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n"
+    code += "\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
     
     try{
         vm.run(code);

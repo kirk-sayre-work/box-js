@@ -1653,3 +1653,30 @@ class DOMParser {
         return document;
     };
 };
+
+// Call all of the dynamically created on click handlers and listener
+// callbacks.
+function callDynamicHandlers() {
+
+    // On click handlers.
+    for (const handler of dynamicOnclickHandlers) {
+        try {
+            eval(handler);
+        }
+        catch (e) {
+            console.log(e.message);
+            console.log(handler);
+        }
+    }
+
+    // Listener callbacks.
+    for (const func of listenerCallbacks) {
+        try {
+            func(dummyEvent);
+        }
+        catch (e) {
+            console.log(e.message);
+            console.log(handler);
+        }
+    }
+}
