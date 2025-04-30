@@ -1421,7 +1421,7 @@ function setTimeout(func, time) {
     // No recursive loops.
     const funcStr = ("" + func);
     if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
-    if (timeoutFuncs[funcStr] > 2) {
+    if (timeoutFuncs[funcStr] > 300) {
         console.log("Recursive setTimeout() loop detected. Breaking loop.")
         return func;
     }
@@ -1550,11 +1550,18 @@ if (typeof(arguments) === "undefined") {
 
 // TODO: Add flag to specify whether to use high or low values.
 var randVal = 0.01;
+var randomCount = 0;
 Math.random = function() {
-    logIOC('Math.random', {}, "Script called Math.random().");
+    randomCount++;
+    if (randomCount < 10) {
+	logIOC('Math.random', {}, "Script called Math.random().");
+    }
+    else {
+	randomCount = 11;
+    }
     const r = randVal;
     randVal += 0.1;
-    if (randVal > 1.0) randval = 0.01;
+    if (randVal > 1.0) randVal = 0.01;
     return r;
 }
 
@@ -1687,9 +1694,63 @@ function callDynamicHandlers() {
     }
 }
 
-// Treat console.warn like console.log.
+// Treat console.warn or .error like console.log.
 console.warn = console.log;
+console.error = console.log;
 
 // TextEncoder support.
 const TextEncoder = nodeUtil.TextEncoder;
 const TextDecoder = nodeUtil.TextDecoder;
+
+// Stubbed Node process package.
+var process = {
+    argv: ["arg1", "arg2"],
+    exit: function (code) {
+	logIOC('process exit()', {code}, "The script called process.exit().");
+    },
+}
+
+// Stubbed Node spawn() function.
+function _spawn(file, args) {
+    logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
+    return {
+	unref: function () {},
+    };
+}
+
+// Stubbed Node execSync() function.
+function _execSync(command, options) {
+    logIOC('process execSync()/exec()', {command: command, options: options}, "The script spawned a process with execSync() or exec().");
+    return "exec command results.";
+}
+
+// Stubbed Node http package.
+var _http = {
+    request: function (url, options) {
+
+	// Is this a request(url, options) call or a request(options) call?
+	if (typeof url !== "string") {
+
+	    // See if host, path, etc. are in the 1st arg
+	    // (request(options) call).
+	    if (typeof url.hostname === "undefined") return;
+	    const host = url.hostname;
+	    var path = "";
+	    if (typeof url.path !== "undefined") {
+		path = url.path;
+	    }
+	    var port = "";
+	    if (typeof url.port !== "undefined") {
+		port = ":" + url.port;
+	    }
+
+	    // Construct the URL based on the options.
+	    options = url;
+	    url = "http://" + host + port + path;
+	}
+	logIOC('http.request()', {url: url, options: options}, "The script made a web request with http.request().");
+	lib.logUrl('http.request()', url);
+	throw("Fake error");
+    },
+};
+

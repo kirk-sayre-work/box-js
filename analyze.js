@@ -477,7 +477,13 @@ function rewrite(code, useException=false) {
     //console.log("!!!! STRMAP !!!!");
     //console.log(strMap);
     //console.log("!!!! STRMAP !!!!");
-    
+
+    // Some samples for some reason have spurious spaces in '==' type
+    // expressions. Fix those while the strings are hidden.
+    code = code.toString().replace(/= +=/g, "==");
+    code = code.toString().replace(/\^ +=/g, "^=");
+    code = code.toString().replace(/= +>/g, "=>");
+
     // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
     // = 12'. Acorn parsing fails on these with a assigning to rvalue
     // syntax error, so rewrite things like this so we can parse
@@ -838,6 +844,12 @@ if (argv["prepended-code"]) {
         prependedCode += fs.readFileSync(files[i], 'utf-8') + "\n\n"
     }
 
+    // Add in require() override code so that stubbed versions of some
+    // packages can be loaded via require().
+    const requireOverride = fs.readFileSync(path.join(__dirname, "require_override.js"), "utf8")
+    code = "const _origRequire = require;\n{" + requireOverride + "\n\n" + code + "\n}";
+
+    // Add in prepended code.
     code = prependedCode + "\n\n" + code
 }
 
@@ -1092,7 +1104,7 @@ if (argv["dangerous-vm"]) {
         timeout: (argv.timeout || 10) * 1000,
         sandbox,
     });
-
+    
     // Fake cscript.exe style ReferenceError messages.
     code = "ReferenceError.prototype.toString = function() { return \"[object Error]\";};\n\n" + code;
     // Fake up Object.toString not being defined in cscript.exe.
@@ -1111,6 +1123,7 @@ if (argv["dangerous-vm"]) {
     // has changed and a callback changes its behavior based on the
     // DOM contents.
     code += "\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
+    //console.log(code);
     
     try{
         vm.run(code);
