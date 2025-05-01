@@ -1094,6 +1094,9 @@ function makeWindowObject() {
             logIOC('Window Parking', val, "The script changed window.park.");
         },        
         eval: function(cmd) { return eval(cmd); },
+        execScript: function(cmd) {
+            lib.runShellCommand(cmd);
+        },
 	btoa: btoa,
         resizeTo: function(a,b){},
         moveTo: function(a,b){},
