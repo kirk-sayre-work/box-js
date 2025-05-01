@@ -483,6 +483,7 @@ function rewrite(code, useException=false) {
     code = code.toString().replace(/= +=/g, "==");
     code = code.toString().replace(/\^ +=/g, "^=");
     code = code.toString().replace(/= +>/g, "=>");
+    code = code.toString().replace(/% +%/g, "%");
 
     // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
     // = 12'. Acorn parsing fails on these with a assigning to rvalue
