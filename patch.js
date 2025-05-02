@@ -128,6 +128,22 @@ function _CreateFunc(...args) {
 	originalSource = originalSource.toString();
 	source = rewrite("(" + originalSource + ")");
     } else if (typeof originalSource === "string") {
+
+        // Sheesh. Looks like in a browser you can obfuscate a
+        // function call like `(function
+        // def...)..constructor("debugger").call("action")`, all this
+        // does is call the defined function.
+        //
+        // Look for that case here.
+        if (originalSource === "debugger") {
+            var r = {};
+            r._func = this;
+            r.call = function (cmd) {
+                // Call the original function?
+                if (cmd === "action") return this._func();
+            };
+            return r;
+        }
 	source = `/* Function arguments: ${JSON.stringify(args)} */\n` + rewrite(originalSource);
     } else {
 	// What the fuck JS
