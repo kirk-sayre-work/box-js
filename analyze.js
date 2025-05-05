@@ -201,7 +201,6 @@ function hideStrs(s) {
             if (currChar != " ") {
                 prevPrevChar = prevChar;
                 prevChar = currChar;
-                skippedSpace = false;
             }
             else {
                 skippedSpace = true;
@@ -477,7 +476,14 @@ function rewrite(code, useException=false) {
     //console.log("!!!! STRMAP !!!!");
     //console.log(strMap);
     //console.log("!!!! STRMAP !!!!");
-    
+
+    // Some samples for some reason have spurious spaces in '==' type
+    // expressions. Fix those while the strings are hidden.
+    code = code.toString().replace(/= +=/g, "==");
+    code = code.toString().replace(/\^ +=/g, "^=");
+    code = code.toString().replace(/= +>/g, "=>");
+    code = code.toString().replace(/% +%/g, "%");
+
     // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
     // = 12'. Acorn parsing fails on these with a assigning to rvalue
     // syntax error, so rewrite things like this so we can parse
@@ -838,6 +844,12 @@ if (argv["prepended-code"]) {
         prependedCode += fs.readFileSync(files[i], 'utf-8') + "\n\n"
     }
 
+    // Add in require() override code so that stubbed versions of some
+    // packages can be loaded via require().
+    const requireOverride = fs.readFileSync(path.join(__dirname, "require_override.js"), "utf8")
+    code = "const _origRequire = require;\n{" + requireOverride + "\n\n" + code + "\n}";
+
+    // Add in prepended code.
     code = prependedCode + "\n\n" + code
 }
 
@@ -865,10 +877,15 @@ if (argv["fake-script-engine"]) {
 }
 var fakeEngineFull = "C:\\WINDOWS\\system32\\" + fakeEngineShort;
 
-// Fake command line options can be set with the --fake-cl-args option.
+// Fake command line options can be set with the --fake-cl-args
+// option. "''" is an empty string argument.
 var commandLineArgs = [];
 if (argv["fake-cl-args"]) {
-    commandLineArgs = argv["fake-cl-args"].split(",");
+    const tmpArgs = argv["fake-cl-args"].split(",");
+    for (var arg of tmpArgs) {
+        if (arg == "''") arg = "";
+        commandLineArgs.push(arg);
+    }
 }
 
 // Fake sample file name can be set with the --fake-sample-name option.
@@ -1114,7 +1131,7 @@ if (argv["dangerous-vm"]) {
         timeout: (argv.timeout || 10) * 1000,
         sandbox,
     });
-
+    
     // Fake cscript.exe style ReferenceError messages.
     code = "ReferenceError.prototype.toString = function() { return \"[object Error]\";};\n\n" + code;
     // Fake up Object.toString not being defined in cscript.exe.
@@ -1123,6 +1140,17 @@ if (argv["dangerous-vm"]) {
     // Run the document.body.onload() function if defined to simulate
     // document loading.
     code += "\nif ((typeof(document) != 'undefined') && (typeof(document.body) != 'undefined') && (typeof(document.body.onload) != 'undefined')) document.body.onload();\n"
+
+    // Run all of the collected onclick handler code snippets pulled
+    // from dynamically added HTML.
+    code += "\nif (typeof dynamicOnclickHandlers === 'undefined') { var dynamicOnclickHandlers = []; }\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
+    
+    // Run all of the collected event listener callback functions 1
+    // more time after the original code has executed in case the DOM
+    // has changed and a callback changes its behavior based on the
+    // DOM contents.
+    code += "\nif (typeof listenerCallbacks === 'undefined') { var listenerCallbacks = []; }\nif (typeof dummyEvent === 'undefined') { var dummyEvent = {}; }\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
+    //console.log(code);
     
     try{
         vm.run(code);
@@ -1149,8 +1177,6 @@ function mapCLSID(clsid) {
         return "adodb.connection";
     case "0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC":
         return "scriptcontrol";
-    case "0D43FE01-F093-11CF-8940-00A0C9054228":
-        return "scripting.filesystemobject";
     case "EE09B103-97E0-11CF-978F-00A02463E06F":
         return "scripting.dictionary";
     case "13709620-C279-11CE-A49E-444553540000":

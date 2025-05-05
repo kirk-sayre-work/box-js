@@ -1,5 +1,14 @@
 const parse = require("node-html-parser").parse;
 const lib = require("./lib.js");
+const nodeCrypto = require('crypto').webcrypto;
+const nodeUtil = require('util');
+const { Buffer } = require('node:buffer');
+
+// Save event listener functions. Event listener callbacks may change
+// the state of the DOM and exhibit different functionality when
+// called again, so save the callback functions so we can call them
+// multiple times.
+const listenerCallbacks = [];
 
 // Dummy event to use for faked event handler calls.
 const dummyEvent = {
@@ -35,7 +44,9 @@ const dummyEvent = {
 
     // A reference to the object to which the event was originally
     // dispatched.
-    target: "??",
+    target: {
+        closest: function() { return false; },
+    },
 
     // The time at which the event was created (in milliseconds). By
     // specification, this value is time since epoch—but in reality,
@@ -273,7 +284,7 @@ var __location = {
        document.
     */
     get href() {
-        if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe';
+        if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
         return this._href;
     },
     set href(url) {
@@ -422,6 +433,7 @@ function __makeFakeElem(data) {
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
+            listenerCallbacks.push(func);
         },
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -474,6 +486,7 @@ function __getElementsByTagName(tag) {
 
 var __currSelectedVal = undefined;
 var __fakeParentElem = undefined;
+var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
 	myType: "Element",
@@ -507,7 +520,7 @@ function __createElement(tag) {
             return this.val;
         },
         get href() {
-            if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe';
+            if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
             return this._href;
         },
         set href(url) {
@@ -523,6 +536,7 @@ function __createElement(tag) {
         log: [],
 	style: {
 	    setProperty: function() {},
+            display: "",
 	},
 	appendChild: function() {
             return __createElement("__append__");
@@ -610,11 +624,26 @@ function __createElement(tag) {
         set innerHTML(content) {
             this._innerHTML = content;
             logIOC("Set innerHTML", {content}, "The script set the innerHTML of an element.");
+
+            // Pull action attribute URLs.
             const urls = pullActionUrls(content);
             if (typeof(urls) !== "undefined") {
                 for (const url of urls) {
                     logUrl('Action Attribute', url);
                 };
+            }
+
+            // Pull out onclick JS and run it (eventually).
+            const clickHandlers = pullClickHandlers(content);
+            if (clickHandlers.length > 0) {
+                lib.info("onclick handler code provided in dynamically added HTML.");
+                for (const handler of clickHandlers) {
+
+                    // Save the onclick handler code snippets so we can
+                    // run them again at the end in case the DOM has
+                    // changed.
+                    dynamicOnclickHandlers.push(handler);
+                }
             }
         },
         get innerHTML() {
@@ -626,6 +655,7 @@ function __createElement(tag) {
             // Simulate the event happing by running the function.
             logIOC("Element.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
+            listenerCallbacks.push(func);
         },
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -654,6 +684,7 @@ function __createElement(tag) {
             this._textContent = d;
             logIOC('Element Text', {d}, "The script changed textContent of an element.");
         },
+        focus: function() {},
     };
     fake_elem["contentWindow"] = {
         document: document,
@@ -768,6 +799,7 @@ function _getNodeIterator (root) {
 }
 
 // Stubbed global document object.
+generatedElements = {};
 var document = {
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
@@ -834,6 +866,7 @@ var document = {
                     r.attrs = attrs[i];
                     this.elementCache[id] = r;
                     r.val = jqueryVals[id];
+                    if ((typeof(r.val) == "undefined") || (r.val == "")) r.val = "legituser@mylegitdomain.com";
                     return r;                    
                 }
             }
@@ -843,17 +876,22 @@ var document = {
 		if ((attrs[i].class === id) || ((attrs[i].id === id))) {
                     var r = __createElement(id);
                     r.value = attrs[i].value;
+                    if ((typeof(r.value) == "undefined") || (r.value == "")) r.value = "legituser@mylegitdomain.com";
 		    return r;
 		}
 	    }
             
         }
 
+        // Have we already made a fake element for this ID?
+        if (typeof(generatedElements[id]) !== "undefined") return generatedElements[id];
+        
         // got nothing to return. Make up some fake element and hope for the best.
         var r = __createElement(id);
         r.val = jqueryVals[id];
-        if (typeof(r.val) == "undefined") r.val = "";
+        if (typeof(r.val) == "undefined") r.val = "legituser@mylegitdomain.com";
 	r.prepend = function() {};
+        generatedElements[id] = r;
         return r;
     },
     documentElement: {
@@ -900,6 +938,7 @@ var document = {
         // Simulate the event happing by running the function.
         logIOC("Document.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
         func(dummyEvent);
+        listenerCallbacks.push(func);
     },
     removeEventListener: function(tag) {
         logIOC("Document.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -926,6 +965,7 @@ var document = {
     },
     close: function() {},
 };
+document.documentElement = document;
 
 // Stubbed out URL class.
 class URL {
@@ -1015,6 +1055,7 @@ class XMLHttpRequest {
         // Simulate the event happing by running the function.
         logIOC("XMLHttpRequest.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
         func(dummyEvent);
+        listenerCallbacks.push(func);
     };
 
     removeEventListener(tag) {
@@ -1053,6 +1094,9 @@ function makeWindowObject() {
             logIOC('Window Parking', val, "The script changed window.park.");
         },        
         eval: function(cmd) { return eval(cmd); },
+        execScript: function(cmd) {
+            lib.runShellCommand(cmd);
+        },
 	btoa: btoa,
         resizeTo: function(a,b){},
         moveTo: function(a,b){},
@@ -1076,6 +1120,7 @@ function makeWindowObject() {
             // Simulate the event happing by running the function.
             logIOC("Window.addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
+            listenerCallbacks.push(func);
         },
         removeEventListener: function(tag) {
             logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
@@ -1126,7 +1171,7 @@ function makeWindowObject() {
 	    func();
         },
         get MAIL_URL() {
-            if (typeof(this._MAIL_URL) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&ref=otherlegitdomain.moe';
+            if (typeof(this._MAIL_URL) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
             return this._MAIL_URL;
         },
         set MAIL_URL(url) {
@@ -1148,6 +1193,7 @@ function makeWindowObject() {
             },
 	},
         frames: [],
+        crypto: nodeCrypto,
     };
 
     return window;
@@ -1374,8 +1420,17 @@ if (WScript.name != "node") {
     };
 };
 
+timeoutFuncs = {}
 function setTimeout(func, time) {
     if (!(typeof(func) === "function")) return;
+    // No recursive loops.
+    const funcStr = ("" + func);
+    if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
+    if (timeoutFuncs[funcStr] > 300) {
+        console.log("Recursive setTimeout() loop detected. Breaking loop.")
+        return func;
+    }
+    timeoutFuncs[funcStr]++;
     func();
     return func;
 };
@@ -1396,16 +1451,14 @@ var exports = {};
 function fetch(url, data) {
     lib.logIOC("fetch", {url: url, data: data}, "The script fetch()ed a URL.");
     lib.logUrl("fetch", url);
-    return {
+    const r = {
 	ok : true,
 	json : function() { return "1"; },
-	then: function(f) {
-	    f();
-	    return {
-		catch: function() {},
-	    };
-	},
     };
+    const p = new Promise((resolve, reject) => {
+        resolve(r);
+    });
+    return p;
 };
 
 // Image class stub.
@@ -1443,6 +1496,26 @@ function pullActionUrls(html) {
     return r;
 }
 
+// Pull JS from onclick="" HTML element attributes.
+function pullClickHandlers(html) {
+
+    // Sanity check.
+    if ((typeof(html) == "undefined") || (typeof(html.match) == "undefined")) return [];
+    
+    // Do we have action attributes?
+    const actPat = /onclick\s*=\s*"([^"]+)"/g;
+    const r = [];
+    for (const match of html.matchAll(actPat)) {
+        var currAct = match[1];
+        if (currAct == "//null") continue;
+        r.push(currAct);
+    }
+
+    // Done.
+    return r;
+}
+
+
 // Stubbing for chrome object. Currently does very little.
 const chrome = {
 
@@ -1473,6 +1546,7 @@ mediaContainer = {
 
 function addEventListener(event, func) {
     func(dummyEvent);
+    listenerCallbacks.push(func);
 }
 
 if (typeof(arguments) === "undefined") {
@@ -1481,11 +1555,18 @@ if (typeof(arguments) === "undefined") {
 
 // TODO: Add flag to specify whether to use high or low values.
 var randVal = 0.01;
+var randomCount = 0;
 Math.random = function() {
-    logIOC('Math.random', {}, "Script called Math.random().");
+    randomCount++;
+    if (randomCount < 10) {
+	logIOC('Math.random', {}, "Script called Math.random().");
+    }
+    else {
+	randomCount = 11;
+    }
     const r = randVal;
     randVal += 0.1;
-    if (randVal > 1.0) randval = 0.01;
+    if (randVal > 1.0) randVal = 0.01;
     return r;
 }
 
@@ -1510,6 +1591,7 @@ var sessionStorage = {
 class URLSearchParams {
     constructor() {};
     get() {};
+    append() {};
 }
 
 // Very stubbed NodeFilter "class".
@@ -1520,3 +1602,160 @@ var NodeFilter = {
 
 function moveTo() {};
 function resizeTo() {};
+
+// Stubbed JWPlayer (video player) support.
+// https://jwplayer.com/
+function jwplayer(arg) {
+
+    // Constructor?
+    if (typeof(arg) !== "undefined") {
+        
+        // Return a fake JWPlayer object.
+        return {
+            setup: function() {},
+            on: function(event, func) {
+                func();
+            },
+            remove: function() {},
+        };
+    }
+
+    // Maybe static methods?
+    return {
+        getPosition: function () {
+            return 100.0;
+        },
+        getDuration: function () {
+            return 100.0;
+        },
+        getState: function () {
+            return "idle";
+        },
+        play: function () {},
+    }
+}
+
+// Stubbed performance object.
+performance = {
+    now: function() { return 51151.43; },
+}
+
+// (Very) stubbed DOMParser class.
+class DOMParser {
+
+    parseFromString(content) {
+        logIOC("DOMParser", {content}, "DOMParser.parseFromString() called.");
+
+        // Pull action attribute URLs.
+        const urls = pullActionUrls(content);
+        if (typeof(urls) !== "undefined") {
+            for (const url of urls) {
+                logUrl('Action Attribute', url);
+            };
+        }
+        
+        // Pull out onclick JS and run it (eventually).
+        const clickHandlers = pullClickHandlers(content);
+        if (clickHandlers.length > 0) {
+            lib.info("onclick handler code provided in parsed HTML.");
+            for (const handler of clickHandlers) {
+                
+                // Save the onclick handler code snippets so we can
+                // run them again at the end in case the DOM has
+                // changed.
+                dynamicOnclickHandlers.push(handler);
+            }
+        }
+
+        // Return a fake "parsed" element.
+        return document;
+    };
+};
+
+// Call all of the dynamically created on click handlers and listener
+// callbacks.
+function callDynamicHandlers() {
+
+    // On click handlers.
+    for (const handler of dynamicOnclickHandlers) {
+        try {
+            eval(handler);
+        }
+        catch (e) {
+            console.log(e.message);
+            console.log(handler);
+        }
+    }
+
+    // Listener callbacks.
+    for (const func of listenerCallbacks) {
+        try {
+            func(dummyEvent);
+        }
+        catch (e) {
+            console.log(e.message);
+            console.log(handler);
+        }
+    }
+}
+
+// Treat console.warn or .error like console.log.
+console.warn = console.log;
+console.error = console.log;
+
+// TextEncoder support.
+const TextEncoder = nodeUtil.TextEncoder;
+const TextDecoder = nodeUtil.TextDecoder;
+
+// Stubbed Node process package.
+var process = {
+    argv: ["arg1", "arg2"],
+    exit: function (code) {
+	logIOC('process exit()', {code}, "The script called process.exit().");
+    },
+}
+
+// Stubbed Node spawn() function.
+function _spawn(file, args) {
+    logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
+    return {
+	unref: function () {},
+    };
+}
+
+// Stubbed Node execSync() function.
+function _execSync(command, options) {
+    logIOC('process execSync()/exec()', {command: command, options: options}, "The script spawned a process with execSync() or exec().");
+    return "exec command results.";
+}
+
+// Stubbed Node http package.
+var _http = {
+    request: function (url, options) {
+
+	// Is this a request(url, options) call or a request(options) call?
+	if (typeof url !== "string") {
+
+	    // See if host, path, etc. are in the 1st arg
+	    // (request(options) call).
+	    if (typeof url.hostname === "undefined") return;
+	    const host = url.hostname;
+	    var path = "";
+	    if (typeof url.path !== "undefined") {
+		path = url.path;
+	    }
+	    var port = "";
+	    if (typeof url.port !== "undefined") {
+		port = ":" + url.port;
+	    }
+
+	    // Construct the URL based on the options.
+	    options = url;
+	    url = "http://" + host + port + path;
+	}
+	logIOC('http.request()', {url: url, options: options}, "The script made a web request with http.request().");
+	lib.logUrl('http.request()', url);
+	throw("Fake error");
+    },
+};
+
