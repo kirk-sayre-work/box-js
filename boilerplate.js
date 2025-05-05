@@ -1105,6 +1105,10 @@ function makeWindowObject() {
                 logIOC('window.open()', {url}, "The script loaded a resource.");
             }
         },
+        on: function(trigger, func) {
+            // Just run the function.
+            func();
+        },
         close: function(){},
         requestAnimationFrame: requestAnimationFrame,
         matchMedia: function(){ return {}; },
@@ -1305,6 +1309,7 @@ var funcDict = {
     html: function() {},
     focus: function() {},
     text: function() {},
+    autocomplete: function() {},
 };
 var jQuery = function(field){
     // Handle things like $(document) by just returning document.
@@ -1344,6 +1349,7 @@ jQuery.support = {
     boxModel: false,
 };
 jQuery.boxModel = false;
+var ajaxurl = __location.href;
 jQuery.ajaxSetup = function() {};
 jQuery.ajax = function(params) {
     const url = params["url"];
