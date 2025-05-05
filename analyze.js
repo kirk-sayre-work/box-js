@@ -1051,19 +1051,25 @@ const sandbox = {
     GetObject: require("./emulator/WMI").GetObject,
     JSON,
     location: new Proxy({
-        href: "http://www.foobar.com/",
+        href: "about:blank",
+        hostname: "localhost",
+        pathname: "/",
         protocol: "http:",
-        host: "www.foobar.com",
-        hostname: "www.foobar.com",
+        toString: () => this.href
     }, {
-        get: function(target, name) {
-            switch (name) {
-                case Symbol.toPrimitive:
-                    return () => "http://www.foobar.com/";
-                default:
-                    return target[name.toLowerCase()];
-            }
+        get(target, name) {
+            lib.logUrl("Location.get", {[name]: target[name]}, `Script is checking window.location.${name}`);
+            return target[name];
         },
+        set(target, name, value) {
+            lib.logIOC("Location.set", {property: name, value}, `Script is setting window.location.${name} to ${value}`);
+            lib.logUrl("Location", {[name]: value}, `Script is setting window.location.${name} to ${value}`);
+            target[name] = value;
+            if (name === 'href') {
+                lib.info(`Script is navigating to ${value}`);
+            }
+            return true;
+        }
     }),
     parse: (x) => {},
     rewrite: (code, log = false) => {
@@ -1107,7 +1113,15 @@ const sandbox = {
         return out
     },
     self: {},
-    require	
+    require,
+    atob: function(str) {
+        const decoded = Buffer.from(str, 'base64').toString('binary');
+        // Log atob calls as IOC
+        if (decoded !== null && decoded !== '' && decoded !== "") {
+            lib.logIOC("atob", {input: str, decoded}, `atob Decoded Base64 Content`);
+        }
+        return decoded;
+    }	
 };
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
