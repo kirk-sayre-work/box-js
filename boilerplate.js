@@ -1224,6 +1224,8 @@ window.JSON = JSON;
 window.Array = Array;
 localStorage = _localStorage;
 top = window;
+// Probably not right, but gets addEventListener() method.
+gBrowser = window;
 
 // Initial stubbed object. Add items a needed.
 var ShareLink = {
@@ -1763,3 +1765,25 @@ var _http = {
     },
 };
 
+// Stubbed Components object.
+const _fakeComponentClass = {
+    getService: function() {
+        return {
+            getCharPref: function() {},
+            setCharPref: function() {},
+            newURI: function(url) {
+                logUrl('Components.classes["..."].getService().newURI()', url);
+            },
+            getCodebasePrincipal :function() {},
+            getLocalStorageForPrincipal: function() {},
+        };
+    },
+};
+var Components = {
+    // Always return the same stubbed results for
+    // Components.classes['....'].
+    classes: new Proxy({}, {
+        get: (target, name) => _fakeComponentClass
+    }),
+    interfaces: {},
+}
