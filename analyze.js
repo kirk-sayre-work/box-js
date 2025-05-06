@@ -1115,13 +1115,387 @@ const sandbox = {
     self: {},
     require,
     atob: function(str) {
-        const decoded = Buffer.from(str, 'base64').toString('binary');
-        // Log atob calls as IOC
-        if (decoded !== null && decoded !== '' && decoded !== "") {
-            lib.logIOC("atob", {input: str, decoded}, `atob Decoded Base64 Content`);
+        try {
+            // Make sure we have a valid string and handle all edge cases
+            if (str === undefined || str === null) {
+                lib.error("atob called with invalid input: " + typeof str);
+                return "";
+            }
+            
+            // Ensure we're working with a string
+            str = String(str);
+            
+            try {
+                // Create buffer directly from base64 string
+                const buffer = Buffer.from(str, 'base64');
+                
+                // Check if content is printable
+                const isPrintable = /^[\x20-\x7E\t\r\n]*$/.test(buffer.toString('binary'));
+                
+                // Create the output filename using a hash of the input
+                const fs = require('fs');
+                const path = require('path');
+                const crypto = require('crypto');
+                const hash = crypto.createHash('md5').update(str).digest('hex');
+                const filename = `atob_decoded_${hash}.bin`;
+                const outputDir = argv.o || (Array.isArray(argv._) && argv._.length > 1 ? `${argv._[1]}/` : './');
+                const filepath = path.join(outputDir, filename);
+                
+                // Always save the raw buffer to a file
+                fs.writeFileSync(filepath, buffer);
+                
+                // Store the filepath in the sandbox itself as a property
+                // This makes it accessible to the click handler
+                sandbox.lastDecodedFile = filepath;
+                global.lastDecodedFile = filepath; // Also store in global for redundancy
+                
+                // For display in logs
+                const decoded = buffer.toString('binary');
+                
+                if (isPrintable) {
+                    // For printable content, truncate it to avoid dumping large content in logs
+                    const displayContent = decoded.length > 100 ? decoded.substring(0, 100) + '...' : decoded;
+                    lib.logIOC("atob", {
+                        input_length: str.length,
+                        output_length: buffer.length,
+                        output_sample: displayContent,
+                        file: filepath
+                    }, `atob Decoded Text Content (saved to ${filename})`);
+                } else {
+                    // For binary content, don't include the content in the log
+                    lib.logIOC("atob", {
+                        input_length: str.length,
+                        output_length: buffer.length,
+                        content_type: 'binary',
+                        file: filepath
+                    }, `atob Decoded Binary Content (saved to ${filename})`);
+                }
+                
+                lib.info(`Saved atob decoded content to ${filepath}`);
+                
+                // Return the result as a binary string
+                return decoded;
+            } catch (bufferError) {
+                lib.error(`Buffer error in atob: ${bufferError.message}`);
+                return ""; // Return empty string on error
+            }
+        } catch (e) {
+            lib.error(`Fatal error in atob: ${e.message}`);
+            return "";
         }
-        return decoded;
-    }	
+    },
+    document: {
+        write: function(content) {
+            lib.logIOC("document.write", {content}, `Script wrote to document: ${content}`);
+            lib.info(`document.write() called with: ${content}`);
+        },
+        writeln: function(content) {
+            lib.logIOC("document.writeln", {content}, `Script wrote to document: ${content}`);
+            lib.info(`document.writeln() called with: ${content}`);
+        },
+        createElement: function(tag) {
+            lib.verbose(`document.createElement(${tag}) called`);
+            return {
+                src: "",
+                href: "",
+                text: "",
+                style: {},
+                download: "",
+                appendChild: function() {},
+                setAttribute: function(name, value) {
+                    lib.verbose(`setAttribute(${name}, ${value}) called on ${tag} element`);
+                    this[name] = value;
+                    if ((tag.toLowerCase() === "script" && name === "src") || 
+                        (tag.toLowerCase() === "link" && name === "href") ||
+                        (tag.toLowerCase() === "a" && name === "href")) {
+                        lib.logUrl(`${tag}.${name}`, value, `Script loaded resource from ${value}`);
+                    }
+                    if (tag.toLowerCase() === "a" && name === "download") {
+                        lib.logIOC("FileDownload", {filename: value}, `Script attempted to download file: ${value}`);
+                    }
+                },
+                click: function() {
+                    if (tag.toLowerCase() === "a" && this.download) {
+                        const downloadInfo = {
+                            filename: this.download,
+                            url: this.href
+                        };
+                        lib.logIOC("FileDownloadTriggered", downloadInfo, 
+                            `Script triggered download of ${this.download} from ${this.href}`);
+                        
+                        // If fake-download flag is set, save the URL content
+                        if (argv["fake-download"] && this.href && this.href.startsWith("blob:")) {
+                            try {
+                                // Generate a unique SHA256 hash for the file content
+                                const fs = require('fs');
+                                const path = require('path');
+                                const crypto = require('crypto');
+                                
+                                // Get the results directory for saving alongside IOC.json
+                                const resultsDir = path.dirname(argv.o || (Array.isArray(argv._) && argv._.length > 1 ? `${argv._[1]}/` : './'));
+                                
+                                // Prepare to hash the content - we'll get it from our stored file
+                                let fileContent = null;
+                                let sourceFile = null;
+                                
+                                try {
+                                    // First check if we have a reference to the last decoded file in sandbox
+                                    if (sandbox.lastDecodedFile && fs.existsSync(sandbox.lastDecodedFile)) {
+                                        // Use the most recently created atob decoded file from sandbox reference
+                                        sourceFile = sandbox.lastDecodedFile;
+                                        fileContent = fs.readFileSync(sourceFile);
+                                    }
+                                    // Fallback to global reference if sandbox reference is not available
+                                    else if (global.lastDecodedFile && fs.existsSync(global.lastDecodedFile)) {
+                                        // Use the most recently created atob decoded file from global reference
+                                        sourceFile = global.lastDecodedFile;
+                                        fileContent = fs.readFileSync(sourceFile);
+                                    } else {
+                                        // Look for .bin files as a last resort
+                                        const files = fs.readdirSync(resultsDir);
+                                        const binFiles = files.filter(file => file.endsWith('.bin'));
+                                        
+                                        if (binFiles.length > 0) {
+                                            // Get the most recently modified bin file
+                                            const fileStats = [];
+                                            for (const file of binFiles) {
+                                                try {
+                                                    const stats = fs.statSync(path.join(resultsDir, file));
+                                                    fileStats.push({
+                                                        name: file,
+                                                        time: stats.mtime.getTime()
+                                                    });
+                                                } catch (statErr) {
+                                                    // Skip this file if we can't get stats
+                                                    lib.verbose(`Couldn't get stats for ${file}: ${statErr.message}`);
+                                                }
+                                            }
+                                            
+                                            if (fileStats.length > 0) {
+                                                // Sort by time, newest first
+                                                fileStats.sort((a, b) => b.time - a.time);
+                                                const latestFile = fileStats[0].name;
+                                                
+                                                // Get content from the most recent bin file
+                                                sourceFile = path.join(resultsDir, latestFile);
+                                                fileContent = fs.readFileSync(sourceFile);
+                                            }
+                                        }
+                                    }
+                                    
+                                    if (fileContent) {
+                                        // Hash the content with SHA256
+                                        const hash = crypto.createHash('sha256').update(fileContent).digest('hex');
+                                        const downloadPath = path.join(resultsDir, `${hash}.bin`);
+                                        
+                                        // Save with the hash name
+                                        fs.writeFileSync(downloadPath, fileContent);
+                                        lib.info(`Saved download ${this.download} as ${hash}.bin in ${resultsDir} (copied from ${path.basename(sourceFile)})`);
+                                        lib.logIOC("DownloadSaved", {
+                                            original_filename: this.download,
+                                            saved_as: `${hash}.bin`,
+                                            path: downloadPath,
+                                            source: this.href,
+                                            content_from: path.basename(sourceFile),
+                                            hash: hash
+                                        }, `Download saved as ${hash}.bin`);
+                                    } else {
+                                        // If we couldn't find any valid content, create a zero-byte file with a hash of zeros
+                                        const emptyHash = crypto.createHash('sha256').update(Buffer.alloc(0)).digest('hex');
+                                        const downloadPath = path.join(resultsDir, `${emptyHash}.bin`);
+                                        fs.writeFileSync(downloadPath, Buffer.alloc(0));
+                                        lib.info(`Created empty file for download ${this.download} as ${emptyHash}.bin (no decoded content found)`);
+                                        lib.logIOC("DownloadSaved", {
+                                            original_filename: this.download,
+                                            saved_as: `${emptyHash}.bin`,
+                                            path: downloadPath,
+                                            source: this.href,
+                                            note: "Empty file created (no decoded content found)",
+                                            hash: emptyHash
+                                        }, `Empty file created for download (saved as ${emptyHash}.bin)`);
+                                    }
+                                } catch (err) {
+                                    // If any errors occur, save an empty file with error hash
+                                    const errorHash = crypto.createHash('sha256').update(Buffer.from(`error:${err.message}`)).digest('hex');
+                                    const downloadPath = path.join(resultsDir, `${errorHash}.bin`);
+                                    fs.writeFileSync(downloadPath, Buffer.alloc(0));
+                                    lib.info(`Created empty file for download ${this.download} as ${errorHash}.bin (error: ${err.message})`);
+                                    lib.logIOC("DownloadSaved", {
+                                        original_filename: this.download,
+                                        saved_as: `${errorHash}.bin`,
+                                        path: downloadPath,
+                                        source: this.href,
+                                        error: err.message,
+                                        hash: errorHash
+                                    }, `Error during download (saved as ${errorHash}.bin)`);
+                                }
+                            } catch (e) {
+                                lib.error(`Fatal error saving download: ${e.message}`);
+                            }
+                        } else {
+                            lib.info(`Would download file ${this.download} (fake-download not enabled)`);
+                        }
+                    }
+                    lib.verbose(`${tag}.click() called`);
+                }
+            };
+        },
+        createElementNS: function(namespace, tag) {
+            lib.verbose(`document.createElementNS(${namespace}, ${tag}) called`);
+            // Return the same type of object as createElement
+            return this.createElement(tag);
+        },
+        getElementById: function(id) {
+            lib.verbose(`document.getElementById(${id}) called`);
+            return {
+                innerHTML: "",
+                value: "",
+                appendChild: function() {}
+            };
+        },
+        getElementsByTagName: function(tagName) {
+            lib.verbose(`document.getElementsByTagName(${tagName}) called`);
+            return [];
+        },
+        addEventListener: function(event, callback, useCapture) {
+            lib.verbose(`document.addEventListener('${event}') called`);
+            lib.logIOC("document.addEventListener", {event}, `Script added '${event}' event listener to document`);
+            
+            // Store callback for later execution
+            if (typeof sandbox.listenerCallbacks === 'undefined') {
+                sandbox.listenerCallbacks = [];
+            }
+            sandbox.listenerCallbacks.push(callback);
+            
+            // If it's a DOMContentLoaded or load event, execute immediately
+            if (event === 'DOMContentLoaded' || event === 'load') {
+                try {
+                    callback({type: event});
+                    lib.verbose(`Executed '${event}' event handler immediately`);
+                } catch (e) {
+                    lib.error(`Error executing '${event}' handler: ${e.message}`);
+                }
+            }
+        },
+        removeEventListener: function(event, callback, useCapture) {
+            lib.verbose(`document.removeEventListener('${event}') called`);
+        },
+        documentElement: {
+            appendChild: function(element) {
+                lib.verbose("document.documentElement.appendChild() called");
+            }
+        },
+        body: {
+            innerHTML: "",
+            appendChild: function() {},
+            onload: function() {
+                lib.verbose("document.body.onload() called");
+                return true;
+            },
+            addEventListener: function(event, callback, useCapture) {
+                lib.verbose(`document.body.addEventListener('${event}') called`);
+                lib.logIOC("document.body.addEventListener", {event}, `Script added '${event}' event listener to document.body`);
+                
+                // Store callback for later execution
+                if (typeof sandbox.listenerCallbacks === 'undefined') {
+                    sandbox.listenerCallbacks = [];
+                }
+                sandbox.listenerCallbacks.push(callback);
+                
+                // If it's a load event, execute immediately
+                if (event === 'load') {
+                    try {
+                        callback({type: event});
+                        lib.verbose(`Executed body '${event}' event handler immediately`);
+                    } catch (e) {
+                        lib.error(`Error executing body '${event}' handler: ${e.message}`);
+                    }
+                }
+            },
+            removeEventListener: function(event, callback, useCapture) {
+                lib.verbose(`document.body.removeEventListener('${event}') called`);
+            }
+        },
+        location: new Proxy({
+            href: "about:blank",
+            hostname: "localhost",
+            pathname: "/",
+            protocol: "http:",
+            toString: () => this.href
+        }, {
+            get(target, name) {
+                lib.logUrl("document.location.get", {[name]: target[name]}, `Script is checking document.location.${name}`);
+                return target[name];
+            },
+            set(target, name, value) {
+                lib.logIOC("document.location.set", {property: name, value}, `Script is setting document.location.${name} to ${value}`);
+                lib.logUrl("document.location", {[name]: value}, `Script is setting document.location.${name} to ${value}`);
+                target[name] = value;
+                if (name === 'href') {
+                    lib.info(`Script is navigating to ${value}`);
+                }
+                return true;
+            }
+        }),
+        cookie: ""
+    },
+    window: {
+        URL: {
+            createObjectURL: function(blob) {
+                const url = "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+                lib.logIOC("window.URL.createObjectURL", {url}, `Script created object URL ${url}`);
+                return url;
+            },
+            revokeObjectURL: function(url) {
+                lib.verbose(`window.URL.revokeObjectURL called for ${url}`);
+            }
+        },
+        atob: function(str) {
+            // Use the global atob function
+            return sandbox.atob(str);
+        }
+    },
+    ArrayBuffer: function(length) {
+        this.byteLength = length;
+        lib.verbose(`ArrayBuffer created with length ${length}`);
+    },
+    Uint8Array: function(buffer) {
+        if (typeof buffer === 'number') {
+            this.length = buffer;
+            this.buffer = new ArrayBuffer(buffer);
+        } else {
+            this.buffer = buffer;
+            this.length = buffer.byteLength;
+        }
+        
+        for (let i = 0; i < this.length; i++) {
+            this[i] = 0;
+        }
+        
+        this.set = function(array, offset) {
+            offset = offset || 0;
+            for (let i = 0; i < array.length; i++) {
+                this[offset + i] = array[i];
+            }
+        };
+        
+        lib.verbose(`Uint8Array created with length ${this.length}`);
+    },
+    Blob: function(parts, options) {
+        this.parts = parts || [];
+        this.options = options || {};
+        lib.logIOC("Blob", {parts: JSON.stringify(parts), options}, `Script created a new Blob`);
+    },
+    URL: {
+        createObjectURL: function(blob) {
+            const url = "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+            lib.logIOC("URL.createObjectURL", {url}, `Script created object URL ${url}`);
+            return url;
+        },
+        revokeObjectURL: function(url) {
+            lib.verbose(`URL.revokeObjectURL called for ${url}`);
+        }
+    }
 };
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
