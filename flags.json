@@ -100,7 +100,7 @@
         {
             "name": "fake-reg-read",
             "type": "Boolean",
-            "description": "Return fake values for registry reads of keys that are unknown to box-js."
+            "description": "Return fake values for registry reads of keys that are unknown to box-js. Also return fake values for environment variable reads."
         },
         {
             "name": "no-kill",
