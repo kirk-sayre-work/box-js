@@ -1132,19 +1132,31 @@ const sandbox = {
                 // Check if content is printable
                 const isPrintable = /^[\x20-\x7E\t\r\n]*$/.test(buffer.toString('binary'));
                 
-                // Create the output filename using a hash of the input
+                // Create the output filename using a hash of the content
                 const fs = require('fs');
                 const path = require('path');
                 const crypto = require('crypto');
-                const hash = crypto.createHash('md5').update(str).digest('hex');
-                const filename = `atob_decoded_${hash}.bin`;
-                const outputDir = argv.o || (Array.isArray(argv._) && argv._.length > 1 ? `${argv._[1]}/` : './');
-                const filepath = path.join(outputDir, filename);
+                
+                // Create a SHA256 hash of the content for the filename
+                const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+                const filename = `${hash}.bin`;
+                
+                // Get the results directory directly from process.argv[3]
+                // This is the actual .results directory that box-js creates
+                const resultsDir = process.argv[3] || './';
+                
+                // Ensure results directory exists
+                if (!fs.existsSync(resultsDir)) {
+                    fs.mkdirSync(resultsDir, { recursive: true });
+                }
+                
+                // Create absolute file path
+                const filepath = path.resolve(path.join(resultsDir, filename));
                 
                 // Always save the raw buffer to a file
                 fs.writeFileSync(filepath, buffer);
                 
-                // Store the filepath in the sandbox itself as a property
+                // Store the absolute filepath in the sandbox itself as a property
                 // This makes it accessible to the click handler
                 sandbox.lastDecodedFile = filepath;
                 global.lastDecodedFile = filepath; // Also store in global for redundancy
@@ -1215,128 +1227,74 @@ const sandbox = {
                     }
                 },
                 click: function() {
-                    if (tag.toLowerCase() === "a" && this.download) {
-                        const downloadInfo = {
-                            filename: this.download,
-                            url: this.href
-                        };
-                        lib.logIOC("FileDownloadTriggered", downloadInfo, 
-                            `Script triggered download of ${this.download} from ${this.href}`);
+                    if (tag.toLowerCase() === "a" && this.download && argv["fake-download"]) {
+                        lib.verbose(`<a> tag clicked with download attribute: ${this.download}`);
                         
-                        // If fake-download flag is set, save the URL content
-                        if (argv["fake-download"] && this.href && this.href.startsWith("blob:")) {
+                        // Get the content to save - try to find the most recent atob decoded content
+                        let contentToSave = "";
+                        let fileData = null;
+                        
+                        // Get the results directory directly from process.argv[3]
+                        // This is the actual .results directory that box-js creates
+                        const outputDir = process.argv[3] || './';
+                        
+                        // Try to use the last decoded content from atob if available
+                        if (sandbox.lastDecodedFile && typeof sandbox.lastDecodedFile === 'string') {
                             try {
-                                // Generate a unique SHA256 hash for the file content
-                                const fs = require('fs');
-                                const path = require('path');
-                                const crypto = require('crypto');
-                                
-                                // Get the results directory for saving alongside IOC.json
-                                const resultsDir = path.dirname(argv.o || (Array.isArray(argv._) && argv._.length > 1 ? `${argv._[1]}/` : './'));
-                                
-                                // Prepare to hash the content - we'll get it from our stored file
-                                let fileContent = null;
-                                let sourceFile = null;
-                                
-                                try {
-                                    // First check if we have a reference to the last decoded file in sandbox
-                                    if (sandbox.lastDecodedFile && fs.existsSync(sandbox.lastDecodedFile)) {
-                                        // Use the most recently created atob decoded file from sandbox reference
-                                        sourceFile = sandbox.lastDecodedFile;
-                                        fileContent = fs.readFileSync(sourceFile);
-                                    }
-                                    // Fallback to global reference if sandbox reference is not available
-                                    else if (global.lastDecodedFile && fs.existsSync(global.lastDecodedFile)) {
-                                        // Use the most recently created atob decoded file from global reference
-                                        sourceFile = global.lastDecodedFile;
-                                        fileContent = fs.readFileSync(sourceFile);
-                                    } else {
-                                        // Look for .bin files as a last resort
-                                        const files = fs.readdirSync(resultsDir);
-                                        const binFiles = files.filter(file => file.endsWith('.bin'));
-                                        
-                                        if (binFiles.length > 0) {
-                                            // Get the most recently modified bin file
-                                            const fileStats = [];
-                                            for (const file of binFiles) {
-                                                try {
-                                                    const stats = fs.statSync(path.join(resultsDir, file));
-                                                    fileStats.push({
-                                                        name: file,
-                                                        time: stats.mtime.getTime()
-                                                    });
-                                                } catch (statErr) {
-                                                    // Skip this file if we can't get stats
-                                                    lib.verbose(`Couldn't get stats for ${file}: ${statErr.message}`);
-                                                }
-                                            }
-                                            
-                                            if (fileStats.length > 0) {
-                                                // Sort by time, newest first
-                                                fileStats.sort((a, b) => b.time - a.time);
-                                                const latestFile = fileStats[0].name;
-                                                
-                                                // Get content from the most recent bin file
-                                                sourceFile = path.join(resultsDir, latestFile);
-                                                fileContent = fs.readFileSync(sourceFile);
-                                            }
-                                        }
-                                    }
-                                    
-                                    if (fileContent) {
-                                        // Hash the content with SHA256
-                                        const hash = crypto.createHash('sha256').update(fileContent).digest('hex');
-                                        const downloadPath = path.join(resultsDir, `${hash}.bin`);
-                                        
-                                        // Save with the hash name
-                                        fs.writeFileSync(downloadPath, fileContent);
-                                        lib.info(`Saved download ${this.download} as ${hash}.bin in ${resultsDir} (copied from ${path.basename(sourceFile)})`);
-                                        lib.logIOC("DownloadSaved", {
-                                            original_filename: this.download,
-                                            saved_as: `${hash}.bin`,
-                                            path: downloadPath,
-                                            source: this.href,
-                                            content_from: path.basename(sourceFile),
-                                            hash: hash
-                                        }, `Download saved as ${hash}.bin`);
-                                    } else {
-                                        // If we couldn't find any valid content, create a zero-byte file with a hash of zeros
-                                        const emptyHash = crypto.createHash('sha256').update(Buffer.alloc(0)).digest('hex');
-                                        const downloadPath = path.join(resultsDir, `${emptyHash}.bin`);
-                                        fs.writeFileSync(downloadPath, Buffer.alloc(0));
-                                        lib.info(`Created empty file for download ${this.download} as ${emptyHash}.bin (no decoded content found)`);
-                                        lib.logIOC("DownloadSaved", {
-                                            original_filename: this.download,
-                                            saved_as: `${emptyHash}.bin`,
-                                            path: downloadPath,
-                                            source: this.href,
-                                            note: "Empty file created (no decoded content found)",
-                                            hash: emptyHash
-                                        }, `Empty file created for download (saved as ${emptyHash}.bin)`);
-                                    }
-                                } catch (err) {
-                                    // If any errors occur, save an empty file with error hash
-                                    const errorHash = crypto.createHash('sha256').update(Buffer.from(`error:${err.message}`)).digest('hex');
-                                    const downloadPath = path.join(resultsDir, `${errorHash}.bin`);
-                                    fs.writeFileSync(downloadPath, Buffer.alloc(0));
-                                    lib.info(`Created empty file for download ${this.download} as ${errorHash}.bin (error: ${err.message})`);
-                                    lib.logIOC("DownloadSaved", {
-                                        original_filename: this.download,
-                                        saved_as: `${errorHash}.bin`,
-                                        path: downloadPath,
-                                        source: this.href,
-                                        error: err.message,
-                                        hash: errorHash
-                                    }, `Error during download (saved as ${errorHash}.bin)`);
-                                }
+                                lib.verbose(`Using lastDecodedFile: ${sandbox.lastDecodedFile}`);
+                                fileData = fs.readFileSync(sandbox.lastDecodedFile);
+                                contentToSave = fileData;
                             } catch (e) {
-                                lib.error(`Fatal error saving download: ${e.message}`);
+                                lib.error(`Error reading lastDecodedFile: ${e.message}`);
+                            }
+                        } else if (global.lastDecodedFile && typeof global.lastDecodedFile === 'string') {
+                            try {
+                                lib.verbose(`Using global.lastDecodedFile: ${global.lastDecodedFile}`);
+                                fileData = fs.readFileSync(global.lastDecodedFile);
+                                contentToSave = fileData;
+                            } catch (e) {
+                                lib.error(`Error reading global.lastDecodedFile: ${e.message}`);
+                            }
+                        }
+                        
+                        // If we have content to save
+                        if (contentToSave) {
+                            const fs = require('fs');
+                            const path = require('path');
+                            const crypto = require('crypto');
+                            
+                            // Create a hash of the content for the filename
+                            const hash = crypto.createHash('sha256').update(contentToSave).digest('hex');
+                            
+                            // Use the specified download filename but add extension if missing
+                            let downloadFilename = this.download || 'download.bin';
+                            
+                            // Save the file to the output directory with the download name 
+                            const filepath = path.resolve(path.join(outputDir, `${hash}_${downloadFilename}`));
+                            
+                            // Ensure file gets written
+                            try {
+                                fs.writeFileSync(filepath, contentToSave);
+                                lib.info(`Saved downloaded file to ${filepath}`);
+                                
+                                // Log the download as an IOC
+                                lib.logIOC("download", {
+                                    filename: downloadFilename,
+                                    file: filepath,
+                                    hash: hash,
+                                    size: contentToSave.length
+                                }, `File downloaded: ${downloadFilename} (${hash})`);
+                            } catch (e) {
+                                lib.error(`Error saving downloaded file: ${e.message}`);
                             }
                         } else {
-                            lib.info(`Would download file ${this.download} (fake-download not enabled)`);
+                            lib.error(`No content available to save for download: ${this.download}`);
                         }
                     }
-                    lib.verbose(`${tag}.click() called`);
+                },
+                getAttribute: function(name) {
+                    lib.verbose(`getAttribute(${name}) called on ${tag} element`);
+                    return this[name];
                 }
             };
         },
