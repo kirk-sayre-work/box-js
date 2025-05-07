@@ -41,7 +41,7 @@ if (argv.encoding) {
         lib.warning("jschardet (v" + require("jschardet/package.json").version + ") couldn't detect encoding, using UTF-8");
         encoding = "utf8";
     } else {
-        lib.debug("jschardet (v" + require("jschardet/package.json").version + ") detected encoding " + encoding);
+        lib.warning("jschardet (v" + require("jschardet/package.json").version + ") detected encoding " + encoding);
     }
 }
 
@@ -201,7 +201,6 @@ function hideStrs(s) {
             if (currChar != " ") {
                 prevPrevChar = prevChar;
                 prevChar = currChar;
-                skippedSpace = false;
             }
             else {
                 skippedSpace = true;
@@ -1052,19 +1051,25 @@ const sandbox = {
     GetObject: require("./emulator/WMI").GetObject,
     JSON,
     location: new Proxy({
-        href: "http://www.foobar.com/",
+        href: "about:blank",
+        hostname: "localhost",
+        pathname: "/",
         protocol: "http:",
-        host: "www.foobar.com",
-        hostname: "www.foobar.com",
+        toString: () => this.href
     }, {
-        get: function(target, name) {
-            switch (name) {
-                case Symbol.toPrimitive:
-                    return () => "http://www.foobar.com/";
-                default:
-                    return target[name.toLowerCase()];
-            }
+        get(target, name) {
+            lib.logUrl("Location.get", {[name]: target[name]}, `Script is checking window.location.${name}`);
+            return target[name];
         },
+        set(target, name, value) {
+            lib.logIOC("Location.set", {property: name, value}, `Script is setting window.location.${name} to ${value}`);
+            lib.logUrl("Location", {[name]: value}, `Script is setting window.location.${name} to ${value}`);
+            target[name] = value;
+            if (name === 'href') {
+                lib.info(`Script is navigating to ${value}`);
+            }
+            return true;
+        }
     }),
     parse: (x) => {},
     rewrite: (code, log = false) => {
@@ -1080,8 +1085,375 @@ const sandbox = {
     _typeof: (x) => x.typeof ? x.typeof : typeof x,
     WScript: wscript_proxy,
     WSH: wscript_proxy,
+    decodeURIComponent: (x) => {
+       out = decodeURIComponent(x)
+       if (argv["decode-uri-component-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("decodeURIComponent",{out}, `decodeURIComponent Output`);
+          }
+	}
+        return out
+    },
+    unescape: (x) => {
+       out = unescape(x)
+       if (argv["decode-unescape-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("unescape",{out}, `unescape Output`);
+          }
+        }
+        return out
+    },	
+    decodeURI: (x) => {
+       out = decodeURI(x)
+       if (argv["decode-uri-as-ioc"]){
+          if(out !== null && out !== x && out !== '' && out !== ""){
+            lib.logIOC("decodeURI",{out}, `decodeURI Output`);
+          }
+        }
+        return out
+    },
     self: {},
-    require
+    require,
+    atob: function(str) {
+        try {
+            // Make sure we have a valid string and handle all edge cases
+            if (str === undefined || str === null) {
+                lib.error("atob called with invalid input: " + typeof str);
+                return "";
+            }
+            
+            // Ensure we're working with a string
+            str = String(str);
+            
+            try {
+                // Create buffer directly from base64 string
+                const buffer = Buffer.from(str, 'base64');
+                
+                // Check if content is printable
+                const isPrintable = /^[\x20-\x7E\t\r\n]*$/.test(buffer.toString('binary'));
+                
+                // Create the output filename using a hash of the content
+                const fs = require('fs');
+                const path = require('path');
+                const crypto = require('crypto');
+                
+                // Create a SHA256 hash of the content for the filename
+                const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+                const filename = `${hash}.bin`;
+                
+                // Get the results directory directly from process.argv[3]
+                // This is the actual .results directory that box-js creates
+                const resultsDir = process.argv[3] || './';
+                
+                // Ensure results directory exists
+                if (!fs.existsSync(resultsDir)) {
+                    fs.mkdirSync(resultsDir, { recursive: true });
+                }
+                
+                // Create absolute file path
+                const filepath = path.resolve(path.join(resultsDir, filename));
+                
+                // Always save the raw buffer to a file
+                fs.writeFileSync(filepath, buffer);
+                
+                // Store the absolute filepath in the sandbox itself as a property
+                // This makes it accessible to the click handler
+                sandbox.lastDecodedFile = filepath;
+                global.lastDecodedFile = filepath; // Also store in global for redundancy
+                
+                // For display in logs
+                const decoded = buffer.toString('binary');
+                
+                if (isPrintable) {
+                    // For printable content, truncate it to avoid dumping large content in logs
+                    const displayContent = decoded.length > 100 ? decoded.substring(0, 100) + '...' : decoded;
+                    lib.logIOC("atob", {
+                        input_length: str.length,
+                        output_length: buffer.length,
+                        output_sample: displayContent,
+                        file: filepath
+                    }, `atob Decoded Text Content (saved to ${filename})`);
+                } else {
+                    // For binary content, don't include the content in the log
+                    lib.logIOC("atob", {
+                        input_length: str.length,
+                        output_length: buffer.length,
+                        content_type: 'binary',
+                        file: filepath
+                    }, `atob Decoded Binary Content (saved to ${filename})`);
+                }
+                
+                lib.info(`Saved atob decoded content to ${filepath}`);
+                
+                // Return the result as a binary string
+                return decoded;
+            } catch (bufferError) {
+                lib.error(`Buffer error in atob: ${bufferError.message}`);
+                return ""; // Return empty string on error
+            }
+        } catch (e) {
+            lib.error(`Fatal error in atob: ${e.message}`);
+            return "";
+        }
+    },
+    document: {
+        write: function(content) {
+            lib.logIOC("document.write", {content}, `Script wrote to document: ${content}`);
+            lib.info(`document.write() called with: ${content}`);
+        },
+        writeln: function(content) {
+            lib.logIOC("document.writeln", {content}, `Script wrote to document: ${content}`);
+            lib.info(`document.writeln() called with: ${content}`);
+        },
+        createElement: function(tag) {
+            lib.verbose(`document.createElement(${tag}) called`);
+            return {
+                src: "",
+                href: "",
+                text: "",
+                style: {},
+                download: "",
+                appendChild: function() {},
+                setAttribute: function(name, value) {
+                    lib.verbose(`setAttribute(${name}, ${value}) called on ${tag} element`);
+                    this[name] = value;
+                    if ((tag.toLowerCase() === "script" && name === "src") || 
+                        (tag.toLowerCase() === "link" && name === "href") ||
+                        (tag.toLowerCase() === "a" && name === "href")) {
+                        lib.logUrl(`${tag}.${name}`, value, `Script loaded resource from ${value}`);
+                    }
+                    if (tag.toLowerCase() === "a" && name === "download") {
+                        lib.logIOC("FileDownload", {filename: value}, `Script attempted to download file: ${value}`);
+                    }
+                },
+                click: function() {
+                    if (tag.toLowerCase() === "a" && this.download && argv["fake-download"]) {
+                        lib.verbose(`<a> tag clicked with download attribute: ${this.download}`);
+                        
+                        // Get the content to save - try to find the most recent atob decoded content
+                        let contentToSave = "";
+                        let fileData = null;
+                        
+                        // Get the results directory directly from process.argv[3]
+                        // This is the actual .results directory that box-js creates
+                        const outputDir = process.argv[3] || './';
+                        
+                        // Try to use the last decoded content from atob if available
+                        if (sandbox.lastDecodedFile && typeof sandbox.lastDecodedFile === 'string') {
+                            try {
+                                lib.verbose(`Using lastDecodedFile: ${sandbox.lastDecodedFile}`);
+                                fileData = fs.readFileSync(sandbox.lastDecodedFile);
+                                contentToSave = fileData;
+                            } catch (e) {
+                                lib.error(`Error reading lastDecodedFile: ${e.message}`);
+                            }
+                        } else if (global.lastDecodedFile && typeof global.lastDecodedFile === 'string') {
+                            try {
+                                lib.verbose(`Using global.lastDecodedFile: ${global.lastDecodedFile}`);
+                                fileData = fs.readFileSync(global.lastDecodedFile);
+                                contentToSave = fileData;
+                            } catch (e) {
+                                lib.error(`Error reading global.lastDecodedFile: ${e.message}`);
+                            }
+                        }
+                        
+                        // If we have content to save
+                        if (contentToSave) {
+                            const fs = require('fs');
+                            const path = require('path');
+                            const crypto = require('crypto');
+                            
+                            // Create a hash of the content for the filename
+                            const hash = crypto.createHash('sha256').update(contentToSave).digest('hex');
+                            
+                            // Use the specified download filename but add extension if missing
+                            let downloadFilename = this.download || 'download.bin';
+                            
+                            // Save the file to the output directory with the download name 
+                            const filepath = path.resolve(path.join(outputDir, `${hash}_${downloadFilename}`));
+                            
+                            // Ensure file gets written
+                            try {
+                                fs.writeFileSync(filepath, contentToSave);
+                                lib.info(`Saved downloaded file to ${filepath}`);
+                                
+                                // Log the download as an IOC
+                                lib.logIOC("download", {
+                                    filename: downloadFilename,
+                                    file: filepath,
+                                    hash: hash,
+                                    size: contentToSave.length
+                                }, `File downloaded: ${downloadFilename} (${hash})`);
+                            } catch (e) {
+                                lib.error(`Error saving downloaded file: ${e.message}`);
+                            }
+                        } else {
+                            lib.error(`No content available to save for download: ${this.download}`);
+                        }
+                    }
+                },
+                getAttribute: function(name) {
+                    lib.verbose(`getAttribute(${name}) called on ${tag} element`);
+                    return this[name];
+                }
+            };
+        },
+        createElementNS: function(namespace, tag) {
+            lib.verbose(`document.createElementNS(${namespace}, ${tag}) called`);
+            // Return the same type of object as createElement
+            return this.createElement(tag);
+        },
+        getElementById: function(id) {
+            lib.verbose(`document.getElementById(${id}) called`);
+            return {
+                innerHTML: "",
+                value: "",
+                appendChild: function() {}
+            };
+        },
+        getElementsByTagName: function(tagName) {
+            lib.verbose(`document.getElementsByTagName(${tagName}) called`);
+            return [];
+        },
+        addEventListener: function(event, callback, useCapture) {
+            lib.verbose(`document.addEventListener('${event}') called`);
+            lib.logIOC("document.addEventListener", {event}, `Script added '${event}' event listener to document`);
+            
+            // Store callback for later execution
+            if (typeof sandbox.listenerCallbacks === 'undefined') {
+                sandbox.listenerCallbacks = [];
+            }
+            sandbox.listenerCallbacks.push(callback);
+            
+            // If it's a DOMContentLoaded or load event, execute immediately
+            if (event === 'DOMContentLoaded' || event === 'load') {
+                try {
+                    callback({type: event});
+                    lib.verbose(`Executed '${event}' event handler immediately`);
+                } catch (e) {
+                    lib.error(`Error executing '${event}' handler: ${e.message}`);
+                }
+            }
+        },
+        removeEventListener: function(event, callback, useCapture) {
+            lib.verbose(`document.removeEventListener('${event}') called`);
+        },
+        documentElement: {
+            appendChild: function(element) {
+                lib.verbose("document.documentElement.appendChild() called");
+            }
+        },
+        body: {
+            innerHTML: "",
+            appendChild: function() {},
+            onload: function() {
+                lib.verbose("document.body.onload() called");
+                return true;
+            },
+            addEventListener: function(event, callback, useCapture) {
+                lib.verbose(`document.body.addEventListener('${event}') called`);
+                lib.logIOC("document.body.addEventListener", {event}, `Script added '${event}' event listener to document.body`);
+                
+                // Store callback for later execution
+                if (typeof sandbox.listenerCallbacks === 'undefined') {
+                    sandbox.listenerCallbacks = [];
+                }
+                sandbox.listenerCallbacks.push(callback);
+                
+                // If it's a load event, execute immediately
+                if (event === 'load') {
+                    try {
+                        callback({type: event});
+                        lib.verbose(`Executed body '${event}' event handler immediately`);
+                    } catch (e) {
+                        lib.error(`Error executing body '${event}' handler: ${e.message}`);
+                    }
+                }
+            },
+            removeEventListener: function(event, callback, useCapture) {
+                lib.verbose(`document.body.removeEventListener('${event}') called`);
+            }
+        },
+        location: new Proxy({
+            href: "about:blank",
+            hostname: "localhost",
+            pathname: "/",
+            protocol: "http:",
+            toString: () => this.href
+        }, {
+            get(target, name) {
+                lib.logUrl("document.location.get", {[name]: target[name]}, `Script is checking document.location.${name}`);
+                return target[name];
+            },
+            set(target, name, value) {
+                lib.logIOC("document.location.set", {property: name, value}, `Script is setting document.location.${name} to ${value}`);
+                lib.logUrl("document.location", {[name]: value}, `Script is setting document.location.${name} to ${value}`);
+                target[name] = value;
+                if (name === 'href') {
+                    lib.info(`Script is navigating to ${value}`);
+                }
+                return true;
+            }
+        }),
+        cookie: ""
+    },
+    window: {
+        URL: {
+            createObjectURL: function(blob) {
+                const url = "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+                lib.logIOC("window.URL.createObjectURL", {url}, `Script created object URL ${url}`);
+                return url;
+            },
+            revokeObjectURL: function(url) {
+                lib.verbose(`window.URL.revokeObjectURL called for ${url}`);
+            }
+        },
+        atob: function(str) {
+            // Use the global atob function
+            return sandbox.atob(str);
+        }
+    },
+    ArrayBuffer: function(length) {
+        this.byteLength = length;
+        lib.verbose(`ArrayBuffer created with length ${length}`);
+    },
+    Uint8Array: function(buffer) {
+        if (typeof buffer === 'number') {
+            this.length = buffer;
+            this.buffer = new ArrayBuffer(buffer);
+        } else {
+            this.buffer = buffer;
+            this.length = buffer.byteLength;
+        }
+        
+        for (let i = 0; i < this.length; i++) {
+            this[i] = 0;
+        }
+        
+        this.set = function(array, offset) {
+            offset = offset || 0;
+            for (let i = 0; i < array.length; i++) {
+                this[offset + i] = array[i];
+            }
+        };
+        
+        lib.verbose(`Uint8Array created with length ${this.length}`);
+    },
+    Blob: function(parts, options) {
+        this.parts = parts || [];
+        this.options = options || {};
+        lib.logIOC("Blob", {parts: JSON.stringify(parts), options}, `Script created a new Blob`);
+    },
+    URL: {
+        createObjectURL: function(blob) {
+            const url = "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+            lib.logIOC("URL.createObjectURL", {url}, `Script created object URL ${url}`);
+            return url;
+        },
+        revokeObjectURL: function(url) {
+            lib.verbose(`URL.revokeObjectURL called for ${url}`);
+        }
+    }
 };
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
@@ -1117,13 +1489,13 @@ if (argv["dangerous-vm"]) {
 
     // Run all of the collected onclick handler code snippets pulled
     // from dynamically added HTML.
-    code += "\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
+    code += "\nif (typeof dynamicOnclickHandlers === 'undefined') { var dynamicOnclickHandlers = []; }\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
     
     // Run all of the collected event listener callback functions 1
     // more time after the original code has executed in case the DOM
     // has changed and a callback changes its behavior based on the
     // DOM contents.
-    code += "\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
+    code += "\nif (typeof listenerCallbacks === 'undefined') { var listenerCallbacks = []; }\nif (typeof dummyEvent === 'undefined') { var dummyEvent = {}; }\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
     //console.log(code);
     
     try{
@@ -1151,8 +1523,6 @@ function mapCLSID(clsid) {
         return "adodb.connection";
     case "0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC":
         return "scriptcontrol";
-    case "0D43FE01-F093-11CF-8940-00A0C9054228":
-        return "scripting.filesystemobject";
     case "EE09B103-97E0-11CF-978F-00A02463E06F":
         return "scripting.dictionary";
     case "13709620-C279-11CE-A49E-444553540000":
