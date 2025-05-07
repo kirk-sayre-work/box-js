@@ -1601,6 +1601,7 @@ function ActiveXObject(name) {
     }
     if (name.match("dom")) {
         const r = {
+            document: sandbox.document,
             createElement: function(tag) {
                 var r = this.document.createElement(tag);
                 r.text = "";
