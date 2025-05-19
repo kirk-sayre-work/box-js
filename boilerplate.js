@@ -804,6 +804,7 @@ var document = {
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
     scripts: [],
+    characterSet: "UTF-8",
     title: "A Web Page",
     referrer: 'https://www.bing.com/',
     body: __createElement("__document_body__"),
@@ -966,6 +967,7 @@ var document = {
     close: function() {},
 };
 document.documentElement = document;
+const fixit = document;
 
 // Stubbed out URL class.
 class URL {
@@ -1196,6 +1198,7 @@ function makeWindowObject() {
 	},
         frames: [],
         crypto: nodeCrypto,
+        getSelection: function () {},
     };
 
     return window;
