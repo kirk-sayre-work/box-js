@@ -67,6 +67,9 @@ const dummyEvent = {
             includes: function() { return false; },
         };
     },
+    data: {
+	type: "???",
+    },
 };
 event = dummyEvent;
 
@@ -676,6 +679,7 @@ function __createElement(tag) {
         },
         isVisible: function() { return true; },
         _textContent: '',
+	innerText: '',
         get textContent() {
             if (typeof(this._textContent) === "undefined") this._textContent = '';
             return this._textContent;
@@ -1199,6 +1203,7 @@ function makeWindowObject() {
         frames: [],
         crypto: nodeCrypto,
         getSelection: function () {},
+	postMessage: function () {},
     };
 
     return window;
@@ -1207,7 +1212,8 @@ window = makeWindowObject();
 window.self = window;
 window.top = window;
 self = window;
-window.parent = makeWindowObject();
+//window.parent = makeWindowObject();
+window.parent = window;
 download = window;
 const _localStorage = {
     getItem: function(x) {
