@@ -107,22 +107,54 @@ const getUUID = uuid.v4;
 function logIOC(type, value, description) {
   log("info", "IOC: " + description);
 
-  if (
-    type === "decodeURIComponent" ||
-    type === "unescape" ||
-    type === "decodeURI"
-  ) {
-    if (decode_strings.indexOf(value.out) === -1) {
-      console.log(decode_strings);
-      decode_strings.push(value.out);
-      IOC.push({ type, value, description });
-      fs.writeFileSync(
-        path.join(directory, "IOC.json"),
-        simpleStringify(IOC, null, "\t")
-      );
+  // Create a string representation of the value for comparison
+  const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  
+  // Check if this IOC already exists
+  const isDuplicate = IOC.some(ioc => {
+    // Match by type first
+    if (ioc.type !== type) return false;
+    
+    // For decode strings, compare the output value
+    if (
+      (type === "decodeURIComponent" ||
+       type === "unescape" ||
+       type === "decodeURI") && 
+      ioc.value && 
+      ioc.value.out === value.out
+    ) {
+      return true;
     }
-  } else {
+    
+    // For other types, compare the full value
+    if (typeof ioc.value === 'object' && typeof value === 'object') {
+      // Compare objects by their string representation
+      const iocValueStr = JSON.stringify(ioc.value);
+      return iocValueStr === valueStr;
+    }
+    
+    // Simple value comparison
+    return ioc.value === value;
+  });
+  
+  // Only add if not a duplicate
+  if (!isDuplicate) {
+    // For specific decode types, also track in decode_strings
+    if (
+      type === "decodeURIComponent" ||
+      type === "unescape" ||
+      type === "decodeURI" &&
+      value && value.out
+    ) {
+      if (decode_strings.indexOf(value.out) === -1) {
+        decode_strings.push(value.out);
+      }
+    }
+    
+    // Add to IOC collection
     IOC.push({ type, value, description });
+    
+    // Write to file
     fs.writeFileSync(
       path.join(directory, "IOC.json"),
       simpleStringify(IOC, null, "\t")
@@ -131,9 +163,15 @@ function logIOC(type, value, description) {
 }
 
 function logUrl(method, url) {
-  log("info", `${method} ${url}`);
-  latestUrl = url;
-  if (urls.indexOf(url) === -1) urls.push(url);
+  // Ensure url is a string and trim whitespace
+  const cleanUrl = typeof url === 'string' ? url.trim() : url;
+  
+  log("info", `${method} ${cleanUrl}`);
+  latestUrl = cleanUrl;
+  
+  // Only add unique URLs to the list
+  if (urls.indexOf(cleanUrl) === -1) urls.push(cleanUrl);
+  
   fs.writeFileSync(
     path.join(directory, "urls.json"),
     simpleStringify(urls, null, "\t")
@@ -347,7 +385,7 @@ module.exports = {
   logUrl,
   logResource: function (resourceName, emulatedPath, content) {
     // Writing a Blob?
-    if (content.constructor.name == "Blob") {
+    if (content && content.constructor && content.constructor.name == "Blob") {
       // Grab the actual contents as a byte string.
       content = content.data;
     }

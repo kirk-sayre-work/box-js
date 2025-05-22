@@ -1045,6 +1045,16 @@ const sandbox = {
                 lib.logIOC("PayloadExec", x, "The script executed JS returned from a C2 server.");
             }
         },
+        error: function (x) {
+            lib.info("Script error output: " + x);
+            // Add error output to IOCs for analysis
+            lib.logIOC("console.error", {message: x}, "Script logged an error message");
+        },
+        warn: function (x) {
+            lib.info("Script warning output: " + x);
+            // Add warning output to IOCs for analysis
+            lib.logIOC("console.warn", {message: x}, "Script logged a warning message");
+        },
 	clear: function() {},
     },
     Enumerator: require("./emulator/Enumerator"),
@@ -1058,12 +1068,13 @@ const sandbox = {
         toString: () => this.href
     }, {
         get(target, name) {
-            lib.logUrl("Location.get", {[name]: target[name]}, `Script is checking window.location.${name}`);
+            const locationGetValue = target[name];
+            lib.logUrl("Location.get", locationGetValue);
             return target[name];
         },
         set(target, name, value) {
             lib.logIOC("Location.set", {property: name, value}, `Script is setting window.location.${name} to ${value}`);
-            lib.logUrl("Location", {[name]: value}, `Script is setting window.location.${name} to ${value}`);
+            lib.logUrl("Location", value);
             target[name] = value;
             if (name === 'href') {
                 lib.info(`Script is navigating to ${value}`);
@@ -1198,12 +1209,18 @@ const sandbox = {
     },
     document: {
         write: function(content) {
-            lib.logIOC("document.write", {content}, `Script wrote to document: ${content}`);
-            lib.info(`document.write() called with: ${content}`);
+            // Log the full content to IOC but use a truncated version for the info message
+            lib.logIOC("document.write", {content}, "Script wrote to document");
+            const truncatedContent = content && content.length > 50 ? 
+                content.substring(0, 50) + '... [content truncated]' : content;
+            lib.info(`document.write() called (length: ${content ? content.length : 0} bytes)`);
         },
         writeln: function(content) {
-            lib.logIOC("document.writeln", {content}, `Script wrote to document: ${content}`);
-            lib.info(`document.writeln() called with: ${content}`);
+            // Log the full content to IOC but use a truncated version for the info message
+            lib.logIOC("document.writeln", {content}, "Script wrote to document");
+            const truncatedContent = content && content.length > 50 ? 
+                content.substring(0, 50) + '... [content truncated]' : content;
+            lib.info(`document.writeln() called (length: ${content ? content.length : 0} bytes)`);
         },
         createElement: function(tag) {
             lib.verbose(`document.createElement(${tag}) called`);
@@ -1220,7 +1237,7 @@ const sandbox = {
                     if ((tag.toLowerCase() === "script" && name === "src") || 
                         (tag.toLowerCase() === "link" && name === "href") ||
                         (tag.toLowerCase() === "a" && name === "href")) {
-                        lib.logUrl(`${tag}.${name}`, value, `Script loaded resource from ${value}`);
+                        lib.logUrl(`${tag}.${name}`, value);
                     }
                     if (tag.toLowerCase() === "a" && name === "download") {
                         lib.logIOC("FileDownload", {filename: value}, `Script attempted to download file: ${value}`);
@@ -1382,12 +1399,13 @@ const sandbox = {
             toString: () => this.href
         }, {
             get(target, name) {
-                lib.logUrl("document.location.get", {[name]: target[name]}, `Script is checking document.location.${name}`);
+                const docLocationGetValue = target[name];
+                lib.logUrl("document.location.get", docLocationGetValue);
                 return target[name];
             },
             set(target, name, value) {
                 lib.logIOC("document.location.set", {property: name, value}, `Script is setting document.location.${name} to ${value}`);
-                lib.logUrl("document.location", {[name]: value}, `Script is setting document.location.${name} to ${value}`);
+                lib.logUrl("document.location", value);
                 target[name] = value;
                 if (name === 'href') {
                     lib.info(`Script is navigating to ${value}`);
