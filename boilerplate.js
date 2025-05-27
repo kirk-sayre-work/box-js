@@ -1135,7 +1135,11 @@ function makeWindowObject() {
         removeEventListener: function(tag) {
             logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },
-        attachEvent: function(){},
+        attachEvent: function(tag, func) {
+	    logIOC("Window.attachEvent()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
+            func(dummyEvent);
+            listenerCallbacks.push(func);
+	},
         getComputedStyle: function(){
 	    return ["??",
 		    "-moz-"];
