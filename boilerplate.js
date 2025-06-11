@@ -458,6 +458,7 @@ function __makeFakeElem(data) {
             logIOC('Element Text', {textContent}, "The script changed textContent of an element.");
         },
         item: function() {},
+	click: function() {},
         removeChild: function() {},
 	remove: function() {},
         append: function() {
