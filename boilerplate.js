@@ -1801,3 +1801,19 @@ var Components = {
     }),
     interfaces: {},
 }
+
+// Looks like the _W object may be some Weebly blog functionality?
+_W = {
+    setup_rpc : function() {},
+    setup_model_rpc : function() {},
+    set securePrefix(domain) {
+        // For tracking treat domain as a URL.
+        const url = "https://" + domain;
+        logIOC('_W.securePrefix', {url}, "The script set _W.securePrefix (Weebly?).");
+	logUrl('_W.securePrefix', url);
+        this._securePrefix = domain;
+    },
+    get securePrefix() {
+        return this._securePrefix;
+    },
+}
