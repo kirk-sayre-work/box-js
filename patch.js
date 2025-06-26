@@ -1,4 +1,5 @@
 /* !!!! Patches from box-js !!!! */
+const argv = require("./argv.js").run;
 let __PATCH_CODE_ADDED__ = true;
 window = this;
 
@@ -50,8 +51,14 @@ Date.prototype.getminutes = Date.prototype.getMinutes;
 
 const legacyDate = Date;
 Date = function() {
+    // Use a fixed old date for the current date if the --use-old-date
+    // command line option is used.
+    if (argv["use-old-date"] && (arguments.length == 0)) {
+        arguments = [2017, 3, 6]
+    }
+    var proxiedDate = new legacyDate(...arguments);
     return new Proxy({
-	_actualTime: new legacyDate(...arguments),
+	_actualTime: proxiedDate,
     }, {
 	get: (target, prop) => {
             // Fast forward through time to foil anti-sandboxing busy

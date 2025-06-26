@@ -231,8 +231,12 @@
             "name": "ignore-rewrite-errors",
             "type": "Boolean",
             "description": "Analyze original sample if any sample rewrites fail."
+        },
+	{
+            "name": "use-old-date",
+            "type": "Boolean",
+            "description": "Lie about the current date/time and return an old date."
         }
-
     ],
     "export": [
         {
