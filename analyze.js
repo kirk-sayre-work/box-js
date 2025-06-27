@@ -1128,7 +1128,35 @@ const sandbox = {
     // TODO: If Blob need to extract the data.
     lib.writeFile(fname, data);
   },
-  setInterval: function () {},
+  setInterval: function (func, time) {
+    // For malware analysis, we want to execute the callback
+    // but need to handle cases where the callback references the interval ID
+    lib.verbose("setInterval called, scheduling callback execution");
+    const intervalId = Math.floor(Math.random() * 1000);
+
+    // Use setTimeout to allow the interval ID to be assigned first
+    setTimeout(() => {
+      if (typeof func === "function") {
+        try {
+          func();
+        } catch (e) {
+          lib.verbose("setInterval callback error: " + e.message);
+        }
+      } else if (typeof func === "string") {
+        try {
+          eval(func);
+        } catch (e) {
+          lib.verbose("setInterval string callback error: " + e.message);
+        }
+      }
+    }, 0);
+
+    return intervalId;
+  },
+  clearInterval: function (id) {
+    // No-op since we execute callbacks immediately
+    lib.verbose("clearInterval called with id: " + id);
+  },
   setTimeout: function (func, time) {
     // The interval should be an int, so do a basic check for int.
     if (typeof time !== "number" || time == null) {
@@ -1147,6 +1175,36 @@ const sandbox = {
   logUrl: lib.logUrl,
   ActiveXObject,
   dom,
+  window: {
+    addEventListener: function (event, callback, useCapture) {
+      lib.verbose(`window.addEventListener('${event}') called`);
+      lib.logIOC(
+        "window.addEventListener",
+        { event, useCapture },
+        `Script added event listener for '${event}' event`
+      );
+      // Mock implementation - just log the call
+    },
+    URL: {
+      createObjectURL: function (blob) {
+        const url =
+          "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+        lib.logIOC(
+          "window.URL.createObjectURL",
+          { url },
+          `Script created object URL ${url}`
+        );
+        return url;
+      },
+      revokeObjectURL: function (url) {
+        lib.verbose(`window.URL.revokeObjectURL called for ${url}`);
+      },
+    },
+    atob: function (str) {
+      // Use the global atob function
+      return sandbox.atob(str);
+    },
+  },
   alert: (x) => {
     lib.info("Displayed alert(" + x + ")");
   },
@@ -1368,6 +1426,25 @@ const sandbox = {
           content ? content.length : 0
         } bytes)`
       );
+
+      // Parse content for script tags and add JavaScript code to execution queue
+      if (content && typeof content === "string") {
+        const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        while ((match = scriptRegex.exec(content)) !== null) {
+          const scriptContent = match[1];
+          if (scriptContent && scriptContent.trim()) {
+            lib.info(
+              `Found JavaScript in document.write content (${scriptContent.length} bytes)`
+            );
+            // Add to dynamically written scripts array for later execution
+            if (typeof sandbox.dynamicScripts === "undefined") {
+              sandbox.dynamicScripts = [];
+            }
+            sandbox.dynamicScripts.push(scriptContent);
+          }
+        }
+      }
     },
     writeln: function (content) {
       // Log the full content to IOC but use a truncated version for the info message
@@ -1381,27 +1458,70 @@ const sandbox = {
           content ? content.length : 0
         } bytes)`
       );
+
+      // Parse content for script tags and add JavaScript code to execution queue
+      if (content && typeof content === "string") {
+        const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        while ((match = scriptRegex.exec(content)) !== null) {
+          const scriptContent = match[1];
+          if (scriptContent && scriptContent.trim()) {
+            lib.info(
+              `Found JavaScript in document.writeln content (${scriptContent.length} bytes)`
+            );
+            // Add to dynamically written scripts array for later execution
+            if (typeof sandbox.dynamicScripts === "undefined") {
+              sandbox.dynamicScripts = [];
+            }
+            sandbox.dynamicScripts.push(scriptContent);
+          }
+        }
+      }
     },
     createElement: function (tag) {
       lib.verbose(`document.createElement(${tag}) called`);
       return {
+        tagName: tag.toUpperCase(),
         src: "",
         href: "",
         text: "",
         style: {},
         download: "",
+        async: false,
         appendChild: function () {},
+        parentNode: null,
         setAttribute: function (name, value) {
           lib.verbose(
             `setAttribute(${name}, ${value}) called on ${tag} element`
           );
           this[name] = value;
-          if (
-            (tag.toLowerCase() === "script" && name === "src") ||
+          // Handle script src - only log as IOC, not in URLs
+          if (tag.toLowerCase() === "script" && name === "src") {
+            lib.logIOC(
+              "ScriptSrc",
+              { url: value, tag: tag },
+              `Script element loads external JavaScript from: ${value}`
+            );
+          }
+          // Handle other URLs - log both as URL and IOC
+          else if (
             (tag.toLowerCase() === "link" && name === "href") ||
             (tag.toLowerCase() === "a" && name === "href")
           ) {
             lib.logUrl(`${tag}.${name}`, value);
+            if (tag.toLowerCase() === "link" && name === "href") {
+              lib.logIOC(
+                "LinkHref",
+                { url: value, tag: tag },
+                `Link element references external resource: ${value}`
+              );
+            } else if (tag.toLowerCase() === "a" && name === "href") {
+              lib.logIOC(
+                "AnchorHref",
+                { url: value, tag: tag },
+                `Anchor element links to: ${value}`
+              );
+            }
           }
           if (tag.toLowerCase() === "a" && name === "download") {
             lib.logIOC(
@@ -1525,7 +1645,53 @@ const sandbox = {
     },
     getElementsByTagName: function (tagName) {
       lib.verbose(`document.getElementsByTagName(${tagName}) called`);
-      return [];
+      // Return a mock element array with parentNode for script injection patterns
+      const mockElement = {
+        tagName: tagName.toUpperCase(),
+        parentNode: {
+          insertBefore: function (newNode, referenceNode) {
+            lib.verbose(
+              `parentNode.insertBefore() called - inserting ${
+                newNode.tagName || "element"
+              } before ${referenceNode.tagName || "element"}`
+            );
+            if (newNode.src) {
+              // For script elements, only log as IOC, not URL
+              if (newNode.tagName && newNode.tagName.toLowerCase() === "script") {
+                lib.logIOC(
+                  "ScriptSrc",
+                  { url: newNode.src, tag: newNode.tagName },
+                  `Script element loads external JavaScript from: ${newNode.src}`
+                );
+              } else {
+                lib.logUrl(`${newNode.tagName || "element"}.src`, newNode.src);
+              }
+            }
+            return newNode;
+          },
+          appendChild: function (newNode) {
+            lib.verbose(
+              `parentNode.appendChild() called - appending ${
+                newNode.tagName || "element"
+              }`
+            );
+            if (newNode.src) {
+              // For script elements, only log as IOC, not URL
+              if (newNode.tagName && newNode.tagName.toLowerCase() === "script") {
+                lib.logIOC(
+                  "ScriptSrc",
+                  { url: newNode.src, tag: newNode.tagName },
+                  `Script element loads external JavaScript from: ${newNode.src}`
+                );
+              } else {
+                lib.logUrl(`${newNode.tagName || "element"}.src`, newNode.src);
+              }
+            }
+            return newNode;
+          },
+        },
+      };
+      return [mockElement];
     },
     addEventListener: function (event, callback, useCapture) {
       lib.verbose(`document.addEventListener('${event}') called`);
@@ -1624,26 +1790,13 @@ const sandbox = {
       }
     ),
     cookie: "",
-  },
-  window: {
-    URL: {
-      createObjectURL: function (blob) {
-        const url =
-          "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
-        lib.logIOC(
-          "window.URL.createObjectURL",
-          { url },
-          `Script created object URL ${url}`
-        );
-        return url;
-      },
-      revokeObjectURL: function (url) {
-        lib.verbose(`window.URL.revokeObjectURL called for ${url}`);
-      },
+    open: function () {
+      lib.verbose(`document.open() called`);
+      lib.logIOC("document.open", {}, "Script called document.open()");
     },
-    atob: function (str) {
-      // Use the global atob function
-      return sandbox.atob(str);
+    close: function () {
+      lib.verbose(`document.close() called`);
+      lib.logIOC("document.close", {}, "Script called document.close()");
     },
   },
   ArrayBuffer: function (length) {
@@ -1773,6 +1926,78 @@ const sandbox = {
     lib.verbose("webkitAudioContext created (redirecting to AudioContext)");
     return new sandbox.AudioContext();
   },
+  structuredClone: function (value) {
+    // Polyfill for structuredClone in vm2 sandbox
+    // This provides basic deep cloning functionality and triggers getters
+    lib.verbose("structuredClone called with value type: " + typeof value);
+
+    if (value === null || typeof value !== "object") {
+      return value;
+    }
+    if (value instanceof Date) {
+      return new Date(value.getTime());
+    }
+    if (value instanceof Array) {
+      return value.map((item) => sandbox.structuredClone(item));
+    }
+    if (typeof value === "object") {
+      const cloned = {};
+      // Get all property names including non-enumerable ones
+      const allProps = Object.getOwnPropertyNames(value);
+      lib.verbose(
+        "structuredClone: Processing object with properties: " +
+          allProps.join(", ")
+      );
+
+      for (const key of allProps) {
+        try {
+          const descriptor = Object.getOwnPropertyDescriptor(value, key);
+          lib.verbose(
+            `structuredClone: Processing property ${key}, has getter: ${!!(
+              descriptor && descriptor.get
+            )}`
+          );
+
+          if (descriptor && descriptor.get) {
+            // For getter properties, access them to trigger execution
+            lib.verbose(`structuredClone: Accessing getter property ${key}`);
+            const propValue = value[key];
+            lib.verbose(
+              `structuredClone: Getter ${key} returned: ${typeof propValue}`
+            );
+            cloned[key] = sandbox.structuredClone(propValue);
+          } else if (descriptor && descriptor.value !== undefined) {
+            // For regular properties
+            cloned[key] = sandbox.structuredClone(descriptor.value);
+          }
+        } catch (e) {
+          lib.verbose(
+            `structuredClone: Failed to access property ${key}: ${e.message}`
+          );
+        }
+      }
+
+      // Also iterate over enumerable properties to catch anything we missed
+      for (const key in value) {
+        if (value.hasOwnProperty(key) && !(key in cloned)) {
+          try {
+            lib.verbose(
+              `structuredClone: Processing enumerable property ${key}`
+            );
+            cloned[key] = sandbox.structuredClone(value[key]);
+          } catch (e) {
+            lib.verbose(
+              `structuredClone: Failed to clone property ${key}: ${e.message}`
+            );
+          }
+        }
+      }
+
+      lib.verbose("structuredClone: Finished cloning object");
+      return cloned;
+    }
+    return value;
+  },
 };
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
@@ -1824,6 +2049,26 @@ if (argv["dangerous-vm"]) {
 
   try {
     vm.run(code);
+
+    // After the main script execution, check for and execute dynamic scripts
+    if (sandbox.dynamicScripts && sandbox.dynamicScripts.length > 0) {
+      lib.info(
+        `Executing ${sandbox.dynamicScripts.length} dynamic script(s) from document.write/writeln`
+      );
+      for (const script of sandbox.dynamicScripts) {
+        try {
+          lib.info(
+            `Executing dynamic script: ${script.substring(0, 50)}${
+              script.length > 50 ? "..." : ""
+            }`
+          );
+          vm.run(script);
+        } catch (e) {
+          lib.error(`Error executing dynamic script: ${e.message}`);
+          lib.verbose(`Failed script content: ${script}`);
+        }
+      }
+    }
   } catch (e) {
     lib.error("Sandbox execution failed:");
     console.log(e.stack);
