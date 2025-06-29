@@ -1204,6 +1204,22 @@ const sandbox = {
       // Use the global atob function
       return sandbox.atob(str);
     },
+    moveTo: function (x, y) {
+      lib.verbose(`window.moveTo(${x}, ${y}) called`);
+      lib.logIOC(
+        "window.moveTo",
+        { x, y },
+        `Script attempted to move window to position (${x}, ${y})`
+      );
+    },
+    resizeTo: function (width, height) {
+      lib.verbose(`window.resizeTo(${width}, ${height}) called`);
+      lib.logIOC(
+        "window.resizeTo",
+        { width, height },
+        `Script attempted to resize window to ${width}x${height}`
+      );
+    },
   },
   alert: (x) => {
     lib.info("Displayed alert(" + x + ")");
@@ -1657,7 +1673,10 @@ const sandbox = {
             );
             if (newNode.src) {
               // For script elements, only log as IOC, not URL
-              if (newNode.tagName && newNode.tagName.toLowerCase() === "script") {
+              if (
+                newNode.tagName &&
+                newNode.tagName.toLowerCase() === "script"
+              ) {
                 lib.logIOC(
                   "ScriptSrc",
                   { url: newNode.src, tag: newNode.tagName },
@@ -1677,7 +1696,10 @@ const sandbox = {
             );
             if (newNode.src) {
               // For script elements, only log as IOC, not URL
-              if (newNode.tagName && newNode.tagName.toLowerCase() === "script") {
+              if (
+                newNode.tagName &&
+                newNode.tagName.toLowerCase() === "script"
+              ) {
                 lib.logIOC(
                   "ScriptSrc",
                   { url: newNode.src, tag: newNode.tagName },
@@ -1997,6 +2019,30 @@ const sandbox = {
       return cloned;
     }
     return value;
+  },
+  close: function () {
+    lib.verbose("close() called - redirecting to document.close()");
+    lib.logIOC("close", {}, "Script called close() function");
+    // This is likely meant to be document.close()
+    if (sandbox.document && sandbox.document.close) {
+      return sandbox.document.close();
+    }
+  },
+  moveTo: function (x, y) {
+    lib.verbose(`moveTo(${x}, ${y}) called`);
+    lib.logIOC(
+      "moveTo",
+      { x, y },
+      `Script attempted to move window to position (${x}, ${y})`
+    );
+  },
+  resizeTo: function (width, height) {
+    lib.verbose(`resizeTo(${width}, ${height}) called`);
+    lib.logIOC(
+      "resizeTo",
+      { width, height },
+      `Script attempted to resize window to ${width}x${height}`
+    );
   },
 };
 
