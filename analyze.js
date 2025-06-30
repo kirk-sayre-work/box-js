@@ -101,6 +101,27 @@ function stripSingleLineComments(s) {
   return r;
 }
 
+function isCodeLine(line) {
+  // Check if a line contains actual JavaScript code (not just comments/whitespace)
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // Skip lines that are only comments
+  if (trimmed.startsWith("//")) return false;
+  if (trimmed.startsWith("/*") && trimmed.endsWith("*/")) return false;
+
+  // Look for JavaScript keywords, operators, or structure
+  const jsPatterns = [
+    /\b(function|var|let|const|if|else|for|while|try|catch|return|new|this)\b/,
+    /[{}();=+\-*/<>!&|]/,
+    /\.\w+\s*\(/, // method calls
+    /\w+\s*[=:]/, // assignments
+    /\w+\(/, // function calls
+  ];
+
+  return jsPatterns.some((pattern) => pattern.test(trimmed));
+}
+
 function isAlphaNumeric(str) {
   var code, i;
 
@@ -115,6 +136,117 @@ function isAlphaNumeric(str) {
     return false;
   }
   return true;
+}
+
+function smartStripComments(s) {
+  // This function is designed to handle heavily commented samples better
+  // than the original hideStrs() comment removal
+
+  // First, handle line-by-line processing for mixed code/comment lines
+  const lines = s.split("\n");
+  const processedLines = [];
+
+  for (let line of lines) {
+    // Skip empty lines and lines that are just whitespace
+    if (!line.trim()) {
+      processedLines.push("");
+      continue;
+    }
+
+    // Check if this line contains actual code
+    if (isCodeLine(line)) {
+      // For lines with code, try to preserve the code part while removing comments
+      // Handle inline /* */ comments
+      let processed = line;
+
+      // Remove inline /* */ comments but be careful about strings
+      let inString = false;
+      let stringChar = "";
+      let result = "";
+      let i = 0;
+
+      while (i < processed.length) {
+        const char = processed[i];
+        const nextChar = processed[i + 1];
+
+        // Track string boundaries
+        if (!inString && (char === '"' || char === "'" || char === "`")) {
+          inString = true;
+          stringChar = char;
+          result += char;
+          i++;
+          continue;
+        } else if (
+          inString &&
+          char === stringChar &&
+          processed[i - 1] !== "\\"
+        ) {
+          inString = false;
+          stringChar = "";
+          result += char;
+          i++;
+          continue;
+        }
+
+        // If we're in a string, just copy the character
+        if (inString) {
+          result += char;
+          i++;
+          continue;
+        }
+
+        // Look for /* comment start
+        if (char === "/" && nextChar === "*") {
+          // Find the end of the comment
+          let commentEnd = processed.indexOf("*/", i + 2);
+          if (commentEnd !== -1) {
+            // Skip the entire comment
+            i = commentEnd + 2;
+            continue;
+          } else {
+            // Comment doesn't end on this line, keep the rest
+            break;
+          }
+        }
+
+        // Look for // comment start
+        if (char === "/" && nextChar === "/") {
+          // Rest of line is a comment
+          break;
+        }
+
+        result += char;
+        i++;
+      }
+
+      // Check if this looks like an undeclared variable assignment
+      const trimmedResult = result.trim();
+      const equalIndex = trimmedResult.indexOf("=");
+      const beforeEqual =
+        equalIndex > 0 ? trimmedResult.substring(0, equalIndex) : trimmedResult;
+
+      if (
+        trimmedResult &&
+        /^\w+\s*=\s*/.test(trimmedResult) &&
+        !trimmedResult.startsWith("var ") &&
+        !trimmedResult.startsWith("let ") &&
+        !trimmedResult.startsWith("const ") &&
+        !beforeEqual.includes(".") && // Not a property assignment
+        !beforeEqual.includes("[")
+      ) {
+        // Not an array element assignment
+        // Add var declaration
+        result = result.replace(/^(\s*)(\w+)/, "$1var $2");
+      }
+
+      processedLines.push(result.trim() ? result : "");
+    } else {
+      // This line is comment-only or whitespace, skip it
+      processedLines.push("");
+    }
+  }
+
+  return processedLines.join("\n");
 }
 
 function hideStrs(s) {
@@ -141,7 +273,9 @@ function hideStrs(s) {
   var inSquareBrackets = false;
   var skippedSpace = false;
 
-  s = stripSingleLineComments(s);
+  // Use smarter comment stripping for heavily commented samples
+  s = smartStripComments(s);
+
   // For debugging.
   var window = "               ";
   // Special case. Regex uses like '/.../["test"]' are really hard
@@ -183,8 +317,12 @@ function hideStrs(s) {
     //window = window.slice(1,) + currChar;
     //console.log(window);
 
-    // Start /* */ comment?
+    // Since we've already handled comments in smartStripComments(),
+    // we can simplify the comment detection here
     var oldInComment = inComment;
+
+    // We still need basic comment detection for remaining edge cases
+    // but it should be much simpler now
     inComment =
       inComment ||
       (prevChar == "/" &&
@@ -194,31 +332,22 @@ function hideStrs(s) {
         !inCommentSingle &&
         !inStrBackTick &&
         (!inRegex || !oldInRegex));
-    //console.log(JSON.stringify([prevPrevChar, prevChar, currChar, inStrDouble, inStrSingle, inCommentSingle, inComment, inRegex, oldInRegex, slashSubstr, justExitedComment]))
-    //console.log(r);
 
-    // In /* */ comment?
+    // In /* */ comment? (Should be rare now after preprocessing)
     if (inComment) {
-      // We are stripping /* */ comments, so drop the '/' if we
-      // just entered the comment.
+      // Skip comment content
       if (oldInComment != inComment) {
         inRegex = false;
         r = r.slice(0, -1);
       }
 
-      // Dropping /* */ comments, so don't save current char.
-
       // Out of comment?
       if (prevChar == "*" && currChar == "/" && !skippedSpace) {
         inComment = false;
-        // Handle FP single line comment detection for things
-        // like '/* comm1 *//* comm2 */'.
         justExitedComment = true;
       }
 
-      // Keep going until we leave the comment. Recognizing some
-      // constructs is hard with whitespace, so strip that out
-      // when tracking previous characters.
+      // Keep going until we leave the comment
       if (currChar != " ") {
         prevPrevChar = prevChar;
         prevChar = currChar;
@@ -228,7 +357,7 @@ function hideStrs(s) {
       continue;
     }
 
-    // Start // comment?
+    // Single line comments should also be mostly handled, but keep basic detection
     inCommentSingle =
       inCommentSingle ||
       (prevChar == "/" &&
@@ -238,7 +367,7 @@ function hideStrs(s) {
         !inComment &&
         !justExitedComment &&
         !inStrBackTick);
-    // Could have falsely jumped out of a /**/ comment if it contains a //.
+
     if (prevChar == "/" && currChar == "/" && !inComment && justExitedComment) {
       inComment = true;
       justExitedComment = false;
@@ -248,10 +377,7 @@ function hideStrs(s) {
 
     // In // comment?
     if (inCommentSingle) {
-      // Not in a regex if we are in a '// ...' comment.
       inRegex = false;
-
-      // Save comment text unmodified.
       r += currChar;
 
       // Out of comment?
@@ -259,7 +385,6 @@ function hideStrs(s) {
         inCommentSingle = false;
       }
 
-      // Keep going until we leave the comment.
       if (currChar != " ") {
         prevPrevChar = prevChar;
         prevChar = currChar;
@@ -521,39 +646,32 @@ function rewrite(code, useException = false) {
   // in string literals. Hide the string literals first.
   //
   // This also strips all comments.
-  var counter = 1000000;
-  const [newCode, strMap] = hideStrs(code);
-  code = newCode;
-  //console.log("!!!! CODE: 1 !!!!");
-  //console.log(code);
-  //console.log("!!!! CODE: 1 !!!!");
-  //console.log("!!!! STRMAP !!!!");
-  //console.log(strMap);
-  //console.log("!!!! STRMAP !!!!");
+  if (!argv["no-rewrite"]) {
+    var counter = 1000000;
+    const [newCode, strMap] = hideStrs(code);
+    code = newCode;
 
-  // Some samples for some reason have spurious spaces in '==' type
-  // expressions. Fix those while the strings are hidden.
-  code = code.toString().replace(/= +=/g, "==");
-  code = code.toString().replace(/\^ +=/g, "^=");
-  code = code.toString().replace(/= +>/g, "=>");
-  code = code.toString().replace(/% +%/g, "%");
+    // Some samples for some reason have spurious spaces in '==' type
+    // expressions. Fix those while the strings are hidden.
+    code = code.toString().replace(/= +=/g, "==");
+    code = code.toString().replace(/\^ +=/g, "^=");
+    code = code.toString().replace(/= +>/g, "=>");
+    code = code.toString().replace(/% +%/g, "%");
 
-  // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
-  // = 12'. Acorn parsing fails on these with a assigning to rvalue
-  // syntax error, so rewrite things like this so we can parse
-  // (replace these expressions with comments). We have to do this
-  // with regexes rather than modifying the parse tree since these
-  // expressions cannot be parsed by acorn.
-  var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
-  code = code.toString().replace(rvaluePat, ";/* ASSIGNING TO RVALUE */");
-  rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
-  code = code.toString().replace(rvaluePat, ";// ASSIGNING TO RVALUE");
-  //console.log("!!!! CODE: 2 !!!!");
-  //console.log(code);
-  //console.log("!!!! CODE: 2 !!!!");
+    // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
+    // = 12'. Acorn parsing fails on these with a assigning to rvalue
+    // syntax error, so rewrite things like this so we can parse
+    // (replace these expressions with comments). We have to do this
+    // with regexes rather than modifying the parse tree since these
+    // expressions cannot be parsed by acorn.
+    var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
+    code = code.toString().replace(rvaluePat, ";/* ASSIGNING TO RVALUE */");
+    rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
+    code = code.toString().replace(rvaluePat, ";// ASSIGNING TO RVALUE");
 
-  // Now unhide the string literals.
-  code = unhideStrs(code, strMap);
+    // Now unhide the string literals.
+    code = unhideStrs(code, strMap);
+  }
   //console.log("!!!! CODE: 3 !!!!");
   //console.log(code);
   //console.log("!!!! CODE: 3 !!!!");
@@ -896,7 +1014,7 @@ cc decoder.c -o decoder
 
 // Extract the actual code to analyze from conditional JScript
 // comments if needed.
-if (argv["extract-conditional-code"]) {
+if (false && argv["extract-conditional-code"]) {
   code = extractCode(code);
 }
 
@@ -1220,6 +1338,23 @@ const sandbox = {
         `Script attempted to resize window to ${width}x${height}`
       );
     },
+    get location() {
+      // Return the global location object so window.location.href works
+      return sandbox.location;
+    },
+    set location(value) {
+      // Allow setting window.location to a URL (like window.location = "http://...")
+      lib.info(`Script is setting window.location to ${value}`);
+      lib.logIOC(
+        "window.location.set",
+        { value },
+        `Script is setting window.location to ${value}`
+      );
+      lib.logUrl("window.location", value);
+      if (sandbox.location) {
+        sandbox.location.href = value;
+      }
+    },
   },
   alert: (x) => {
     lib.info("Displayed alert(" + x + ")");
@@ -1232,6 +1367,29 @@ const sandbox = {
     //log: (x) => lib.info("Script output: " + JSON.stringify(x)),
     log: function (x) {
       lib.info("Script output: " + x);
+      // Check for our monitoring messages
+      if (typeof x === "string" && x.includes("DEOBFUSCATED URL DETECTED:")) {
+        const url = x.replace("DEOBFUSCATED URL DETECTED: ", "");
+        lib.logUrl("DeobfuscatedURL", url);
+        lib.logIOC(
+          "DeobfuscatedURL",
+          { url: url },
+          "Script deobfuscated and attempted to navigate to URL: " + url
+        );
+      } else if (
+        typeof x === "string" &&
+        x.includes("String.fromCharCode deobfuscation detected:")
+      ) {
+        const decodedContent = x.replace(
+          "String.fromCharCode deobfuscation detected: ",
+          ""
+        );
+        lib.logIOC(
+          "String.fromCharCode",
+          { decoded: decodedContent },
+          "Script used String.fromCharCode for deobfuscation"
+        );
+      }
       // Log evals of JS downloaded from a C2 if needed.
       if (x === "EXECUTED DOWNLOADED PAYLOAD") {
         lib.logIOC(
@@ -1264,6 +1422,11 @@ const sandbox = {
   Enumerator: require("./emulator/Enumerator"),
   GetObject: require("./emulator/WMI").GetObject,
   JSON,
+  String: String,
+  Object: Object,
+  Function: Function,
+  Array: Array,
+  Date: Date,
   location: new Proxy(
     {
       href: "about:blank",
@@ -1275,10 +1438,15 @@ const sandbox = {
     {
       get(target, name) {
         const locationGetValue = target[name];
-        lib.logUrl("Location.get", locationGetValue);
+        if (name === "href" || name === "toString") {
+          lib.verbose(
+            `location.${name} accessed, returning: ${locationGetValue}`
+          );
+        }
         return target[name];
       },
       set(target, name, value) {
+        lib.info(`Script is setting location.${name} to ${value}`);
         lib.logIOC(
           "Location.set",
           { property: name, value },
@@ -1656,6 +1824,10 @@ const sandbox = {
       return {
         innerHTML: "",
         value: "",
+        href: "",
+        style: {
+          display: "",
+        },
         appendChild: function () {},
       };
     },
@@ -2043,6 +2215,23 @@ const sandbox = {
       { width, height },
       `Script attempted to resize window to ${width}x${height}`
     );
+  },
+  String: {
+    fromCharCode: function (...args) {
+      const result = String.fromCharCode(...args);
+      // Log if we're converting multiple characters (likely deobfuscation)
+      if (args.length > 3 || result.length > 3) {
+        lib.verbose(
+          `String.fromCharCode called with ${args.length} arguments, result: ${result}`
+        );
+        lib.logIOC(
+          "String.fromCharCode",
+          { args: args.slice(0, 10), result: result.substring(0, 100) }, // Truncate for readability
+          `Script used String.fromCharCode for potential deobfuscation`
+        );
+      }
+      return result;
+    },
   },
 };
 

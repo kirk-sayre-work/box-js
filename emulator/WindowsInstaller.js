@@ -2,6 +2,8 @@ const lib = require("../lib");
 
 function WindowsInstaller() {
 
+    this.clazz = "WindowsInstaller";
+    
     this.installproduct = function(url) {
         lib.logIOC("WindowsInstaller", {"url": url}, "The script installed a remote MSI.");
         lib.logUrl('Remote MSI Install', url);

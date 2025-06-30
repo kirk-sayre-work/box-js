@@ -88,6 +88,8 @@ class TaskObject {
 
 function ScheduleService() {
 
+    this.clazz = "ScheduleService";
+    
     this.Language = undefined;
     this.Timeout = undefined;
 

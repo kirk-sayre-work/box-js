@@ -67,6 +67,9 @@ const dummyEvent = {
             includes: function() { return false; },
         };
     },
+    data: {
+	type: "???",
+    },
 };
 event = dummyEvent;
 
@@ -455,6 +458,7 @@ function __makeFakeElem(data) {
             logIOC('Element Text', {textContent}, "The script changed textContent of an element.");
         },
         item: function() {},
+	click: function() {},
         removeChild: function() {},
 	remove: function() {},
         append: function() {
@@ -676,6 +680,7 @@ function __createElement(tag) {
         },
         isVisible: function() { return true; },
         _textContent: '',
+	innerText: '',
         get textContent() {
             if (typeof(this._textContent) === "undefined") this._textContent = '';
             return this._textContent;
@@ -804,6 +809,7 @@ var document = {
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
     scripts: [],
+    characterSet: "UTF-8",
     title: "A Web Page",
     referrer: 'https://www.bing.com/',
     body: __createElement("__document_body__"),
@@ -966,6 +972,7 @@ var document = {
     close: function() {},
 };
 document.documentElement = document;
+const fixit = document;
 
 // Stubbed out URL class.
 class URL {
@@ -1105,6 +1112,10 @@ function makeWindowObject() {
                 logIOC('window.open()', {url}, "The script loaded a resource.");
             }
         },
+        on: function(trigger, func) {
+            // Just run the function.
+            func();
+        },
         close: function(){},
         requestAnimationFrame: requestAnimationFrame,
         matchMedia: function(){ return {}; },
@@ -1125,7 +1136,11 @@ function makeWindowObject() {
         removeEventListener: function(tag) {
             logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },
-        attachEvent: function(){},
+        attachEvent: function(tag, func) {
+	    logIOC("Window.attachEvent()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
+            func(dummyEvent);
+            listenerCallbacks.push(func);
+	},
         getComputedStyle: function(){
 	    return ["??",
 		    "-moz-"];
@@ -1194,6 +1209,8 @@ function makeWindowObject() {
 	},
         frames: [],
         crypto: nodeCrypto,
+        getSelection: function () {},
+	postMessage: function () {},
     };
 
     return window;
@@ -1202,7 +1219,8 @@ window = makeWindowObject();
 window.self = window;
 window.top = window;
 self = window;
-window.parent = makeWindowObject();
+//window.parent = makeWindowObject();
+window.parent = window;
 download = window;
 const _localStorage = {
     getItem: function(x) {
@@ -1222,6 +1240,8 @@ window.JSON = JSON;
 window.Array = Array;
 localStorage = _localStorage;
 top = window;
+// Probably not right, but gets addEventListener() method.
+gBrowser = window;
 
 // Initial stubbed object. Add items a needed.
 var ShareLink = {
@@ -1307,6 +1327,7 @@ var funcDict = {
     html: function() {},
     focus: function() {},
     text: function() {},
+    autocomplete: function() {},
 };
 var jQuery = function(field){
     // Handle things like $(document) by just returning document.
@@ -1346,6 +1367,7 @@ jQuery.support = {
     boxModel: false,
 };
 jQuery.boxModel = false;
+var ajaxurl = __location.href;
 jQuery.ajaxSetup = function() {};
 jQuery.ajax = function(params) {
     const url = params["url"];
@@ -1759,3 +1781,41 @@ var _http = {
     },
 };
 
+// Stubbed Components object.
+const _fakeComponentClass = {
+    getService: function() {
+        return {
+            getCharPref: function() {},
+            setCharPref: function() {},
+            newURI: function(url) {
+                logUrl('Components.classes["..."].getService().newURI()', url);
+            },
+            getCodebasePrincipal :function() {},
+            getLocalStorageForPrincipal: function() {},
+        };
+    },
+};
+var Components = {
+    // Always return the same stubbed results for
+    // Components.classes['....'].
+    classes: new Proxy({}, {
+        get: (target, name) => _fakeComponentClass
+    }),
+    interfaces: {},
+}
+
+// Looks like the _W object may be some Weebly blog functionality?
+_W = {
+    setup_rpc : function() {},
+    setup_model_rpc : function() {},
+    set securePrefix(domain) {
+        // For tracking treat domain as a URL.
+        const url = "https://" + domain;
+        logIOC('_W.securePrefix', {url}, "The script set _W.securePrefix (Weebly?).");
+	logUrl('_W.securePrefix', url);
+        this._securePrefix = domain;
+    },
+    get securePrefix() {
+        return this._securePrefix;
+    },
+}

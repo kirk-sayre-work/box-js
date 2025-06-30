@@ -4,6 +4,8 @@ const argv = require("../argv.js").run;
 
 function WScriptShell() {
 
+    this.clazz = "WScriptShell";
+    
     const vars = {
 	/* %APPDATA% equals C:\Documents and Settings\{username}\Application Data on Windows XP,
 	 * but C:\Users\{username}\AppData\Roaming on Win Vista and above.
@@ -26,22 +28,25 @@ function WScriptShell() {
 	userprofile: "C:\\Users\\Sysop12\\",
 	windir: "C:\\WINDOWS"
     };
+
+    this._envVarLookup = function (argument) {
+	argument = argument.toLowerCase();
+	if (argument in vars) return vars[argument];
+	// Return a fake value so all environment variable reads succeed?
+        if (argv["fake-reg-read"]) return ("Unknown environment variable " + argument);
+	lib.kill(`Unknown parameter ${argument} for WScriptShell.Environment.*`);
+    };
     
     this.environment = (x) => {
-	if (x.toLowerCase() === "system")
-	    return (argument) => {
-		argument = argument.toLowerCase();
-		if (argument in vars) return vars[argument];
-		lib.kill(`Unknown parameter ${argument} for WScriptShell.Environment.System`);
+	if ((x.toLowerCase() === "system") || (x.toLowerCase() === "process")) {
+	    var r = this._envVarLookup;
+	    r.Item = function(x) {
+		if (x.toLowerCase() === "programdata")
+		    return "C:\\ProgramData";
+		return "Unknown environment variable " + x;
 	    };
-	if (x.toLowerCase() === "process")
-	    return {
-		Item: function(x) {
-		    if (x.toLowerCase() === "programdata")
-			return "C:\\ProgramData";
-		    return "Unknown process item " + x;
-		}
-	    };
+	    return r;
+	}
 	return `(Environment variable ${x})`;
     };
 

@@ -100,7 +100,7 @@
         {
             "name": "fake-reg-read",
             "type": "Boolean",
-            "description": "Return fake values for registry reads of keys that are unknown to box-js."
+            "description": "Return fake values for registry reads of keys that are unknown to box-js. Also return fake values for environment variable reads."
         },
         {
             "name": "no-kill",
@@ -246,6 +246,11 @@
             "name": "ignore-rewrite-errors",
             "type": "Boolean",
             "description": "Analyze original sample if any sample rewrites fail."
+        },
+	{
+            "name": "use-old-date",
+            "type": "Boolean",
+            "description": "Lie about the current date/time and return an old date."
         }
     ],
     "export": [

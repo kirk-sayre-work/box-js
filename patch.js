@@ -1,4 +1,5 @@
 /* !!!! Patches from box-js !!!! */
+const argv = require("./argv.js").run;
 let __PATCH_CODE_ADDED__ = true;
 // Initialize window object with necessary methods
 window = this;
@@ -151,9 +152,15 @@ Date.prototype.getminutes = Date.prototype.getMinutes;
 
 const legacyDate = Date;
 Date = function () {
+  // Use a fixed old date for the current date if the --use-old-date
+  // command line option is used.
+  if (argv["use-old-date"] && (arguments.length == 0)) {
+    arguments = [2017, 3, 6];
+  }
+  var proxiedDate = new legacyDate(...arguments);
   return new Proxy(
     {
-      _actualTime: new legacyDate(...arguments),
+      _actualTime: proxiedDate,
     },
     {
       get: (target, prop) => {
@@ -275,38 +282,44 @@ Function = _CreateFunc;
 Function.toString = () => _OriginalFunction.toString();
 Function.valueOf = () => _OriginalFunction.valueOf();
 
-String.prototype.xstrx = function () {
-  const hex = this.valueOf();
-  var str = "";
-  for (let i = 0; i < hex.length; i += 2) {
-    const hexValue = hex.substr(i, 2);
-    const decimalValue = parseInt(hexValue, 16);
-    str += String.fromCharCode(decimalValue);
-  }
-  return str;
-};
+if (typeof String !== 'undefined' && String.prototype) {
+  String.prototype.xstrx = function () {
+    const hex = this.valueOf();
+    var str = "";
+    for (let i = 0; i < hex.length; i += 2) {
+      const hexValue = hex.substr(i, 2);
+      const decimalValue = parseInt(hexValue, 16);
+      str += String.fromCharCode(decimalValue);
+    }
+    return str;
+  };
+}
 
 // Track the values of elements set by JQuery $("#q").val(...) uses.
 var jqueryVals = {};
 
 // Fake up JQuery $("#q").val(...) uses.
-String.prototype.val = function (value) {
-  if (!this.startsWith("#")) return;
-  logIOC(
-    "JQuery",
-    value,
-    'The script used JQuery $("#q").val(...) to set an element.'
-  );
-  var name = this.slice(1);
-  jqueryVals[name] = value;
-};
+if (typeof String !== 'undefined' && String.prototype) {
+  String.prototype.val = function (value) {
+    if (!this.startsWith("#")) return;
+    logIOC(
+      "JQuery",
+      value,
+      'The script used JQuery $("#q").val(...) to set an element.'
+    );
+    var name = this.slice(1);
+    jqueryVals[name] = value;
+  };
 
-// Fake up JQuery $("#q").fadeIn(...) uses.
-String.prototype.fadeIn = function () {};
+  // Fake up JQuery $("#q").fadeIn(...) uses.
+  String.prototype.fadeIn = function () {};
+}
 
-Object.prototype.replace = function () {
-  return "";
-};
+if (typeof Object !== 'undefined' && Object.prototype) {
+  Object.prototype.replace = function () {
+    return "";
+  };
+}
 
 constructor.prototype.bind = function (context, func) {
   const r = function () {
