@@ -2216,16 +2216,6 @@ const sandbox = {
 // Make window available as a global by assigning it as a direct property
 sandbox.window = sandbox.window;
 
-// Debug: Check sandbox structure
-console.log("DEBUG: sandbox.window exists:", !!sandbox.window);
-console.log("DEBUG: typeof sandbox.window:", typeof sandbox.window);
-if (sandbox.window) {
-  console.log(
-    "DEBUG: sandbox.window.location exists:",
-    !!sandbox.window.location
-  );
-}
-
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
 // It will prevent console.log from calling the "inspect" property,
 // which can be kinda messy with Proxies
