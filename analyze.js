@@ -1422,11 +1422,6 @@ const sandbox = {
   Enumerator: require("./emulator/Enumerator"),
   GetObject: require("./emulator/WMI").GetObject,
   JSON,
-  String: String,
-  Object: Object,
-  Function: Function,
-  Array: Array,
-  Date: Date,
   location: new Proxy(
     {
       href: "about:blank",
@@ -2216,24 +2211,20 @@ const sandbox = {
       `Script attempted to resize window to ${width}x${height}`
     );
   },
-  String: {
-    fromCharCode: function (...args) {
-      const result = String.fromCharCode(...args);
-      // Log if we're converting multiple characters (likely deobfuscation)
-      if (args.length > 3 || result.length > 3) {
-        lib.verbose(
-          `String.fromCharCode called with ${args.length} arguments, result: ${result}`
-        );
-        lib.logIOC(
-          "String.fromCharCode",
-          { args: args.slice(0, 10), result: result.substring(0, 100) }, // Truncate for readability
-          `Script used String.fromCharCode for potential deobfuscation`
-        );
-      }
-      return result;
-    },
-  },
 };
+
+// Make window available as a global by assigning it as a direct property
+sandbox.window = sandbox.window;
+
+// Debug: Check sandbox structure
+console.log("DEBUG: sandbox.window exists:", !!sandbox.window);
+console.log("DEBUG: typeof sandbox.window:", typeof sandbox.window);
+if (sandbox.window) {
+  console.log(
+    "DEBUG: sandbox.window.location exists:",
+    !!sandbox.window.location
+  );
+}
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
 // It will prevent console.log from calling the "inspect" property,
