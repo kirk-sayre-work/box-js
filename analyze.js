@@ -145,11 +145,15 @@ function smartStripComments(s) {
   // First, handle line-by-line processing for mixed code/comment lines
   const lines = s.split("\n");
   const processedLines = [];
+  let inMultiLineDeclaration = false;
 
-  for (let line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    
     // Skip empty lines and lines that are just whitespace
     if (!line.trim()) {
       processedLines.push("");
+      inMultiLineDeclaration = false;
       continue;
     }
 
@@ -163,45 +167,45 @@ function smartStripComments(s) {
       let inString = false;
       let stringChar = "";
       let result = "";
-      let i = 0;
+      let j = 0;
 
-      while (i < processed.length) {
-        const char = processed[i];
-        const nextChar = processed[i + 1];
+      while (j < processed.length) {
+        const char = processed[j];
+        const nextChar = processed[j + 1];
 
         // Track string boundaries
         if (!inString && (char === '"' || char === "'" || char === "`")) {
           inString = true;
           stringChar = char;
           result += char;
-          i++;
+          j++;
           continue;
         } else if (
           inString &&
           char === stringChar &&
-          processed[i - 1] !== "\\"
+          processed[j - 1] !== "\\"
         ) {
           inString = false;
           stringChar = "";
           result += char;
-          i++;
+          j++;
           continue;
         }
 
         // If we're in a string, just copy the character
         if (inString) {
           result += char;
-          i++;
+          j++;
           continue;
         }
 
         // Look for /* comment start
         if (char === "/" && nextChar === "*") {
           // Find the end of the comment
-          let commentEnd = processed.indexOf("*/", i + 2);
+          let commentEnd = processed.indexOf("*/", j + 2);
           if (commentEnd !== -1) {
             // Skip the entire comment
-            i = commentEnd + 2;
+            j = commentEnd + 2;
             continue;
           } else {
             // Comment doesn't end on this line, keep the rest
@@ -216,11 +220,26 @@ function smartStripComments(s) {
         }
 
         result += char;
-        i++;
+        j++;
       }
 
-      // Check if this looks like an undeclared variable assignment
+      // Check if this line starts or continues a multi-line declaration
       const trimmedResult = result.trim();
+      
+      // If the previous line ended with a comma, we're in a multi-line declaration
+      if (i > 0) {
+        const prevProcessedLine = processedLines[i - 1];
+        if (prevProcessedLine && prevProcessedLine.trim().endsWith(",")) {
+          inMultiLineDeclaration = true;
+        }
+      }
+      
+      // Check if this line starts a new declaration
+      if (trimmedResult.match(/^\s*(var|let|const)\s+/)) {
+        inMultiLineDeclaration = true;
+      }
+
+      // Only add var if not in a multi-line declaration and other conditions are met
       const equalIndex = trimmedResult.indexOf("=");
       const beforeEqual =
         equalIndex > 0 ? trimmedResult.substring(0, equalIndex) : trimmedResult;
@@ -232,17 +251,23 @@ function smartStripComments(s) {
         !trimmedResult.startsWith("let ") &&
         !trimmedResult.startsWith("const ") &&
         !beforeEqual.includes(".") && // Not a property assignment
-        !beforeEqual.includes("[")
+        !beforeEqual.includes("[") && // Not an array element assignment
+        !inMultiLineDeclaration // Not part of a multi-line declaration
       ) {
-        // Not an array element assignment
         // Add var declaration
         result = result.replace(/^(\s*)(\w+)/, "$1var $2");
+      }
+      
+      // Check if this line ends the declaration (semicolon ends it)
+      if (trimmedResult.endsWith(";")) {
+        inMultiLineDeclaration = false;
       }
 
       processedLines.push(result.trim() ? result : "");
     } else {
       // This line is comment-only or whitespace, skip it
       processedLines.push("");
+      inMultiLineDeclaration = false;
     }
   }
 
