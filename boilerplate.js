@@ -556,9 +556,9 @@ function __createElement(tag) {
             this.attributes[name] = val;
 
             // Setting the source of an element to (maybe) a URL?
-            if (name === "src") {
+            if ((name === "src") || (name === "href")) {
                 if (val.startsWith("//")) val = "https:" + val;
-                logIOC('Element Source', {val}, "The script set the src field of an element.");
+                logIOC('Element Source', {val}, "The script set the src or href field of an element.");
 	        logUrl('Element Source', val);
             }
         },
@@ -938,6 +938,7 @@ var document = {
         return __createElement("__doc_fragment__");
     },
     createElement: __createElement,
+    createElementNS: __createElement,
     createTextNode: function(text) {},
     addEventListener: function(tag, func) {
         if (typeof(func) === "undefined") return;
@@ -1817,3 +1818,18 @@ _W = {
         return this._securePrefix;
     },
 }
+
+// MSC (Microsoft Console File) exploit handling JS.
+// https://vipre.com/blog/exploiting-microsoft-console-files/?srsltid=AfmBOor7f23IhqGeBT449rXd5hUCuboeencbv-J44b7Ik8CB_8dXq1Qs
+var external = {
+    Document: {
+	ScopeNamespace: {
+	    GetRoot: function() {},
+	    GetChild: function() {},
+	    GetNext: function() {},
+	},
+	ActiveView: {
+	    ControlObject: ActiveXObject("dom"),
+	},
+    }
+};
