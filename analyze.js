@@ -1267,6 +1267,63 @@ var wscript_proxy = new Proxy(
 );
 
 const sandbox = {
+  // Mock event object for browser compatibility - uses Proxy for dynamic event types
+  event: new Proxy({
+    type: "load", // default type, can be overridden
+    target: null,
+    currentTarget: null,
+    bubbles: false,
+    cancelable: false,
+    defaultPrevented: false,
+    preventDefault: function() {
+      lib.verbose("event.preventDefault() called");
+      this.defaultPrevented = true;
+    },
+    stopPropagation: function() {
+      lib.verbose("event.stopPropagation() called");
+    },
+    stopImmediatePropagation: function() {
+      lib.verbose("event.stopImmediatePropagation() called");
+    }
+  }, {
+    get(target, prop) {
+      // Log access to event properties for analysis
+      if (prop === 'type' && target[prop]) {
+        lib.verbose(`event.type accessed: ${target[prop]}`);
+      } else if (typeof prop === 'string' && prop !== 'constructor' && prop !== 'toString' && prop !== 'valueOf') {
+        lib.verbose(`event.${prop} accessed`);
+      }
+      
+      // Return the property if it exists, otherwise return reasonable defaults
+      if (prop in target) {
+        return target[prop];
+      }
+      
+      // Provide sensible defaults for common event properties
+      switch (prop) {
+        case 'timeStamp':
+          return Date.now();
+        case 'isTrusted':
+          return true;
+        case 'eventPhase':
+          return 2; // AT_TARGET phase
+        case 'srcElement':
+          return target.target;
+        case 'returnValue':
+          return !target.defaultPrevented;
+        case 'cancelBubble':
+          return false;
+        default:
+          return undefined;
+      }
+    },
+    set(target, prop, value) {
+      lib.verbose(`event.${prop} set to: ${value}`);
+      // Allow dynamic setting of event type and other properties
+      target[prop] = value;
+      return true;
+    }
+  }),
   saveAs: function (data, fname) {
     // TODO: If Blob need to extract the data.
     lib.writeFile(fname, data);
@@ -1454,6 +1511,34 @@ const sandbox = {
       pathname: "/",
       protocol: "http:",
       toString: () => this.href,
+      replace: function(url) {
+        lib.info(`Script is replacing location with ${url}`);
+        lib.logIOC(
+          "location.replace",
+          { url },
+          `Script called location.replace() with ${url}`
+        );
+        lib.logUrl("location.replace", url);
+        this.href = url;
+      },
+      assign: function(url) {
+        lib.info(`Script is assigning location to ${url}`);
+        lib.logIOC(
+          "location.assign",
+          { url },
+          `Script called location.assign() with ${url}`
+        );
+        lib.logUrl("location.assign", url);
+        this.href = url;
+      },
+      reload: function(forcedReload) {
+        lib.info(`Script called location.reload(${forcedReload})`);
+        lib.logIOC(
+          "location.reload",
+          { forcedReload },
+          `Script called location.reload()`
+        );
+      },
     },
     {
       get(target, name) {
@@ -1981,6 +2066,34 @@ const sandbox = {
         pathname: "/",
         protocol: "http:",
         toString: () => this.href,
+        replace: function(url) {
+          lib.info(`Script is replacing document.location with ${url}`);
+          lib.logIOC(
+            "document.location.replace",
+            { url },
+            `Script called document.location.replace() with ${url}`
+          );
+          lib.logUrl("document.location.replace", url);
+          this.href = url;
+        },
+        assign: function(url) {
+          lib.info(`Script is assigning document.location to ${url}`);
+          lib.logIOC(
+            "document.location.assign",
+            { url },
+            `Script called document.location.assign() with ${url}`
+          );
+          lib.logUrl("document.location.assign", url);
+          this.href = url;
+        },
+        reload: function(forcedReload) {
+          lib.info(`Script called document.location.reload(${forcedReload})`);
+          lib.logIOC(
+            "document.location.reload",
+            { forcedReload },
+            `Script called document.location.reload()`
+          );
+        },
       },
       {
         get(target, name) {
