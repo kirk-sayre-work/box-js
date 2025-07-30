@@ -595,6 +595,13 @@ function __createElement(tag) {
         select: function() {
             __currSelectedVal = this.val;
         },
+	setSelectionRange: function() {
+	    // Do we have an element value that might get selected?
+	    if (typeof(this.attributes["value"]) !== "undefined") {
+		this.val = this.attributes["value"];
+		__currSelectedVal = this.val;
+	    }	    
+	},
         cloneNode: function() {
             //// Actually clone the element (deep copy).
             //return JSON.parse(JSON.stringify(this));
