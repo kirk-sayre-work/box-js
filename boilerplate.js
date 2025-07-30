@@ -1844,3 +1844,15 @@ var external = {
 	},
     }
 };
+
+// Stubbed crypto class.
+const crypto = {
+    getRandomValues : function(arr) {
+	// Not random so runs are deterministic.
+	var r = [];
+	for (let i = 0; i < arr.length; i++) {
+	    r.push(i);
+	}
+	return r;
+    }
+};
