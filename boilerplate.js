@@ -997,6 +997,10 @@ class URL {
                 this.hostname = this.hostname.slice(0, endHost);
             }
         }
+	this.searchParams = {
+	    set : function() {},
+	};
+	
 	lib.logIOC("URL()", {method: "URL()", url: this.url}, "The script created a URL object.");
         lib.logUrl("URL()", this.url);
     };
