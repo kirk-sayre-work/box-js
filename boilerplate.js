@@ -697,6 +697,14 @@ function __createElement(tag) {
             logIOC('Element Text', {d}, "The script changed textContent of an element.");
         },
         focus: function() {},
+        getBoundingClientRect: function() {
+            return {
+                top: 100,
+                bottom: 200,
+                left: 100,
+                right: 200,
+            };
+        },
     };
     fake_elem["contentWindow"] = {
         document: document,
