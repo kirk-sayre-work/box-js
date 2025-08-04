@@ -338,7 +338,7 @@ module.exports.GetObject = function(name) {
 
     // Track URLs from 'script:...' GetObject() creations.
     const lname = name.toLowerCase();
-    if (lname.startsWith("script:http")) {
+    if (lname.startsWith("script:http") || lname.startsWith("scriptlet:http")) {
         const url = lname.replace("script:http", "http");
 	lib.logUrl("GetObject()", url);
         lib.logIOC("GetObject()", url, "The script used WMI to download a remote object.");
