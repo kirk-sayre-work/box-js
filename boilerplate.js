@@ -997,9 +997,11 @@ class URL {
         if (typeof(url) == "undefined") url = "???";
 	this.url = url + base;
         this.hostname = "???";
+	this.pathname = '/and/i/have/a/path.php';
         const startHost = this.url.indexOf("://");
         if (startHost >= 0) {
             this.hostname = this.url.slice(startHost + 3);
+	    this.pathname = this.hostname;
             const endHost = this.hostname.indexOf("/");
             if (endHost >= 0) {
                 this.hostname = this.hostname.slice(0, endHost);
