@@ -1930,10 +1930,33 @@ const sandbox = {
         innerHTML: "",
         value: "",
         href: "",
+        textContent: "",
         style: {
           display: "",
         },
         appendChild: function () {},
+        addEventListener: function (event, callback, useCapture) {
+          lib.verbose(`Element.addEventListener(${event}) called`);
+          lib.logIOC("Element Event", { event: event, element_id: id }, `Element with ID '${id}' added '${event}' event listener`);
+          
+          // Execute callbacks for behavioral analysis (like patch.js does)
+          if (callback) {
+            try {
+              setTimeout(() => {
+                lib.verbose(`Executing ${event} handler for element ${id}`);
+                if (typeof callback === "function") {
+                  callback();
+                } else if (typeof callback === "string") {
+                  // Execute string callbacks as JavaScript (real browser behavior)
+                  lib.verbose(`Executing string callback: ${callback.substring(0, 100)}${callback.length > 100 ? "..." : ""}`);
+                  eval(callback);
+                }
+              }, 100);
+            } catch (e) {
+              lib.verbose(`Error executing ${event} handler for element ${id}: ${e.message}`);
+            }
+          }
+        },
       };
     },
     getElementsByTagName: function (tagName) {
