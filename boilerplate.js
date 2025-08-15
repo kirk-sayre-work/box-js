@@ -746,6 +746,9 @@ const navigator = {
     geolocation: {
     },
     gpu: {
+        requestAdapter: function () {
+            return undefined;
+        },
     },
     hid: {
     },
@@ -1164,8 +1167,9 @@ function makeWindowObject() {
             listenerCallbacks.push(func);
 	},
         getComputedStyle: function(){
-	    return ["??",
-		    "-moz-"];
+            return {
+                getPropertyValue: function() { return "none"; },
+            };
         },
         createDocumentFragment: function() {},
         createElement: __createElement,    
