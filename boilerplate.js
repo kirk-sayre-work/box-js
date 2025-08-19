@@ -915,6 +915,8 @@ var document = {
         generatedElements[id] = r;
         return r;
     },
+    style: {},
+    className: "",
     documentElement: {
         style: {},
         className: "",
