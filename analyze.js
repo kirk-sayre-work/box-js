@@ -652,6 +652,7 @@ function extractCode(code) {
   return r;
 }
 
+
 function rewrite(code, useException = false) {
   //console.log("!!!! CODE: 0 !!!!");
   //console.log(code);
@@ -807,7 +808,18 @@ If you run into unexpected results, try uncommenting lines that look like
           },
         });
       } catch (e) {
-        if (useException) return 'throw("Parse Error")';
+        if (useException) {
+          lib.warning(`Parse error in dynamic code: ${e.message}`);
+          if (code.length < 500) {
+            lib.warning(`Full code snippet: ${code.replace(/\r?\n/g, '\\n')}`);
+          } else {
+            lib.warning(`Code snippet (first 200 chars): ${code.substring(0, 200).replace(/\r?\n/g, '\\n')}`);
+            lib.warning(`Code snippet (last 200 chars): ${code.substring(code.length - 200).replace(/\r?\n/g, '\\n')}`);
+          }
+          
+          
+          return 'throw("Parse Error")';
+        }
         lib.error("Couldn't parse with Acorn:");
         lib.error(e);
         lib.error("");
@@ -1570,6 +1582,13 @@ const sandbox = {
   rewrite: (code, log = false) => {
     const ret = rewrite(code, (useException = true));
     if (log) lib.logJS(ret);
+    // If rewrite failed and returned a parse error, return original code to avoid crashing
+    if (ret === 'throw("Parse Error")') {
+      lib.warning(`Main rewrite failed for code snippet, returning original code`);
+      // For now, just return the original code - the main script analysis 
+      // still has proper loop rewriting, this is just for dynamic eval'd snippets
+      return code;
+    }
     return ret;
   },
   ScriptEngine: () => {
