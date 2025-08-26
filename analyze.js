@@ -149,7 +149,7 @@ function smartStripComments(s) {
 
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
-    
+
     // Skip empty lines and lines that are just whitespace
     if (!line.trim()) {
       processedLines.push("");
@@ -225,7 +225,7 @@ function smartStripComments(s) {
 
       // Check if this line starts or continues a multi-line declaration
       const trimmedResult = result.trim();
-      
+
       // If the previous line ended with a comma, we're in a multi-line declaration
       if (i > 0) {
         const prevProcessedLine = processedLines[i - 1];
@@ -233,7 +233,7 @@ function smartStripComments(s) {
           inMultiLineDeclaration = true;
         }
       }
-      
+
       // Check if this line starts a new declaration
       if (trimmedResult.match(/^\s*(var|let|const)\s+/)) {
         inMultiLineDeclaration = true;
@@ -257,7 +257,7 @@ function smartStripComments(s) {
         // Add var declaration
         result = result.replace(/^(\s*)(\w+)/, "$1var $2");
       }
-      
+
       // Check if this line ends the declaration (semicolon ends it)
       if (trimmedResult.endsWith(";")) {
         inMultiLineDeclaration = false;
@@ -652,7 +652,6 @@ function extractCode(code) {
   return r;
 }
 
-
 function rewrite(code, useException = false) {
   //console.log("!!!! CODE: 0 !!!!");
   //console.log(code);
@@ -811,13 +810,20 @@ If you run into unexpected results, try uncommenting lines that look like
         if (useException) {
           lib.warning(`Parse error in dynamic code: ${e.message}`);
           if (code.length < 500) {
-            lib.warning(`Full code snippet: ${code.replace(/\r?\n/g, '\\n')}`);
+            lib.warning(`Full code snippet: ${code.replace(/\r?\n/g, "\\n")}`);
           } else {
-            lib.warning(`Code snippet (first 200 chars): ${code.substring(0, 200).replace(/\r?\n/g, '\\n')}`);
-            lib.warning(`Code snippet (last 200 chars): ${code.substring(code.length - 200).replace(/\r?\n/g, '\\n')}`);
+            lib.warning(
+              `Code snippet (first 200 chars): ${code
+                .substring(0, 200)
+                .replace(/\r?\n/g, "\\n")}`
+            );
+            lib.warning(
+              `Code snippet (last 200 chars): ${code
+                .substring(code.length - 200)
+                .replace(/\r?\n/g, "\\n")}`
+            );
           }
-          
-          
+
           return 'throw("Parse Error")';
         }
         lib.error("Couldn't parse with Acorn:");
@@ -1280,62 +1286,70 @@ var wscript_proxy = new Proxy(
 
 const sandbox = {
   // Mock event object for browser compatibility - uses Proxy for dynamic event types
-  event: new Proxy({
-    type: "load", // default type, can be overridden
-    target: null,
-    currentTarget: null,
-    bubbles: false,
-    cancelable: false,
-    defaultPrevented: false,
-    preventDefault: function() {
-      lib.verbose("event.preventDefault() called");
-      this.defaultPrevented = true;
+  event: new Proxy(
+    {
+      type: "load", // default type, can be overridden
+      target: null,
+      currentTarget: null,
+      bubbles: false,
+      cancelable: false,
+      defaultPrevented: false,
+      preventDefault: function () {
+        lib.verbose("event.preventDefault() called");
+        this.defaultPrevented = true;
+      },
+      stopPropagation: function () {
+        lib.verbose("event.stopPropagation() called");
+      },
+      stopImmediatePropagation: function () {
+        lib.verbose("event.stopImmediatePropagation() called");
+      },
     },
-    stopPropagation: function() {
-      lib.verbose("event.stopPropagation() called");
-    },
-    stopImmediatePropagation: function() {
-      lib.verbose("event.stopImmediatePropagation() called");
+    {
+      get(target, prop) {
+        // Log access to event properties for analysis
+        if (prop === "type" && target[prop]) {
+          lib.verbose(`event.type accessed: ${target[prop]}`);
+        } else if (
+          typeof prop === "string" &&
+          prop !== "constructor" &&
+          prop !== "toString" &&
+          prop !== "valueOf"
+        ) {
+          lib.verbose(`event.${prop} accessed`);
+        }
+
+        // Return the property if it exists, otherwise return reasonable defaults
+        if (prop in target) {
+          return target[prop];
+        }
+
+        // Provide sensible defaults for common event properties
+        switch (prop) {
+          case "timeStamp":
+            return Date.now();
+          case "isTrusted":
+            return true;
+          case "eventPhase":
+            return 2; // AT_TARGET phase
+          case "srcElement":
+            return target.target;
+          case "returnValue":
+            return !target.defaultPrevented;
+          case "cancelBubble":
+            return false;
+          default:
+            return undefined;
+        }
+      },
+      set(target, prop, value) {
+        lib.verbose(`event.${prop} set to: ${value}`);
+        // Allow dynamic setting of event type and other properties
+        target[prop] = value;
+        return true;
+      },
     }
-  }, {
-    get(target, prop) {
-      // Log access to event properties for analysis
-      if (prop === 'type' && target[prop]) {
-        lib.verbose(`event.type accessed: ${target[prop]}`);
-      } else if (typeof prop === 'string' && prop !== 'constructor' && prop !== 'toString' && prop !== 'valueOf') {
-        lib.verbose(`event.${prop} accessed`);
-      }
-      
-      // Return the property if it exists, otherwise return reasonable defaults
-      if (prop in target) {
-        return target[prop];
-      }
-      
-      // Provide sensible defaults for common event properties
-      switch (prop) {
-        case 'timeStamp':
-          return Date.now();
-        case 'isTrusted':
-          return true;
-        case 'eventPhase':
-          return 2; // AT_TARGET phase
-        case 'srcElement':
-          return target.target;
-        case 'returnValue':
-          return !target.defaultPrevented;
-        case 'cancelBubble':
-          return false;
-        default:
-          return undefined;
-      }
-    },
-    set(target, prop, value) {
-      lib.verbose(`event.${prop} set to: ${value}`);
-      // Allow dynamic setting of event type and other properties
-      target[prop] = value;
-      return true;
-    }
-  }),
+  ),
   saveAs: function (data, fname) {
     // TODO: If Blob need to extract the data.
     lib.writeFile(fname, data);
@@ -1523,7 +1537,7 @@ const sandbox = {
       pathname: "/",
       protocol: "http:",
       toString: () => this.href,
-      replace: function(url) {
+      replace: function (url) {
         lib.info(`Script is replacing location with ${url}`);
         lib.logIOC(
           "location.replace",
@@ -1533,7 +1547,7 @@ const sandbox = {
         lib.logUrl("location.replace", url);
         this.href = url;
       },
-      assign: function(url) {
+      assign: function (url) {
         lib.info(`Script is assigning location to ${url}`);
         lib.logIOC(
           "location.assign",
@@ -1543,7 +1557,7 @@ const sandbox = {
         lib.logUrl("location.assign", url);
         this.href = url;
       },
-      reload: function(forcedReload) {
+      reload: function (forcedReload) {
         lib.info(`Script called location.reload(${forcedReload})`);
         lib.logIOC(
           "location.reload",
@@ -1584,8 +1598,10 @@ const sandbox = {
     if (log) lib.logJS(ret);
     // If rewrite failed and returned a parse error, return original code to avoid crashing
     if (ret === 'throw("Parse Error")') {
-      lib.warning(`Main rewrite failed for code snippet, returning original code`);
-      // For now, just return the original code - the main script analysis 
+      lib.warning(
+        `Main rewrite failed for code snippet, returning original code`
+      );
+      // For now, just return the original code - the main script analysis
       // still has proper loop rewriting, this is just for dynamic eval'd snippets
       return code;
     }
@@ -1956,8 +1972,12 @@ const sandbox = {
         appendChild: function () {},
         addEventListener: function (event, callback, useCapture) {
           lib.verbose(`Element.addEventListener(${event}) called`);
-          lib.logIOC("Element Event", { event: event, element_id: id }, `Element with ID '${id}' added '${event}' event listener`);
-          
+          lib.logIOC(
+            "Element Event",
+            { event: event, element_id: id },
+            `Element with ID '${id}' added '${event}' event listener`
+          );
+
           // Execute callbacks for behavioral analysis (like patch.js does)
           if (callback) {
             try {
@@ -1967,12 +1987,18 @@ const sandbox = {
                   callback();
                 } else if (typeof callback === "string") {
                   // Execute string callbacks as JavaScript (real browser behavior)
-                  lib.verbose(`Executing string callback: ${callback.substring(0, 100)}${callback.length > 100 ? "..." : ""}`);
+                  lib.verbose(
+                    `Executing string callback: ${callback.substring(0, 100)}${
+                      callback.length > 100 ? "..." : ""
+                    }`
+                  );
                   eval(callback);
                 }
               }, 100);
             } catch (e) {
-              lib.verbose(`Error executing ${event} handler for element ${id}: ${e.message}`);
+              lib.verbose(
+                `Error executing ${event} handler for element ${id}: ${e.message}`
+              );
             }
           }
         },
@@ -2108,7 +2134,7 @@ const sandbox = {
         pathname: "/",
         protocol: "http:",
         toString: () => this.href,
-        replace: function(url) {
+        replace: function (url) {
           lib.info(`Script is replacing document.location with ${url}`);
           lib.logIOC(
             "document.location.replace",
@@ -2118,7 +2144,7 @@ const sandbox = {
           lib.logUrl("document.location.replace", url);
           this.href = url;
         },
-        assign: function(url) {
+        assign: function (url) {
           lib.info(`Script is assigning document.location to ${url}`);
           lib.logIOC(
             "document.location.assign",
@@ -2128,7 +2154,7 @@ const sandbox = {
           lib.logUrl("document.location.assign", url);
           this.href = url;
         },
-        reload: function(forcedReload) {
+        reload: function (forcedReload) {
           lib.info(`Script called document.location.reload(${forcedReload})`);
           lib.logIOC(
             "document.location.reload",
@@ -2413,6 +2439,9 @@ if (argv["dangerous-vm"]) {
 } else {
   lib.debug("Analyzing with vm2 v" + require("vm2/package.json").version);
 
+  // Add self reference (equivalent to window in browsers) - needed for some malware samples
+  sandbox.self = sandbox;
+
   const vm = new VM({
     timeout: (argv.timeout || 10) * 1000,
     sandbox,
@@ -2442,6 +2471,23 @@ if (argv["dangerous-vm"]) {
   code +=
     "\nif (typeof listenerCallbacks === 'undefined') { var listenerCallbacks = []; }\nif (typeof dummyEvent === 'undefined') { var dummyEvent = {}; }\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
   //console.log(code);
+
+  // More secure custom eval that validates through vm2 first, then applies rewriting
+  sandbox.eval = function (code) {
+    if (arguments.length === 0) return undefined;
+    code = `${code}`;
+
+    // First validate the code through vm2's native eval for security checks
+    try {
+      vm.run(`(function(){ eval(${JSON.stringify(code)}); })()`);
+    } catch (e) {
+      throw e; // Re-throw validation errors
+    }
+
+    // If validation passed, run our rewritten version for proper scope access
+    const rewrittenCode = rewrite(code, true);
+    return vm.run(rewrittenCode);
+  };
 
   try {
     vm.run(code);
