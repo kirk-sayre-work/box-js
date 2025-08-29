@@ -419,6 +419,7 @@ function __makeFakeElem(data) {
     };
     
     var fakeDict = {
+        "contentDocument" : document,
         "appendChild" : func,
         "insertBefore" : func,
         "parentNode" : {
@@ -493,6 +494,11 @@ var __fakeParentElem = undefined;
 var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
+        set onload(func) {
+	    lib.info("Script set window.onload function.");
+	    func();
+        },
+        "contentDocument" : document,
 	myType: "Element",
         set src(url) {
 
