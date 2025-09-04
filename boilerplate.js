@@ -514,6 +514,7 @@ function __createElement(tag) {
     var fake_elem = {
 	// For debugging.
 	__name: "fake_elem",
+        pathname: '/and/i/have/a/path.php',
 	nodeType: 9,
         set onload(func) {
 	    lib.info("Script set window.onload function.");
@@ -748,7 +749,12 @@ const __stubbed_then = {
     // For debugging.
     __name: "__stubbed_then",
     then: function(f) {
-	f();
+        try {
+	    f("fake");
+        }
+        catch (e) {
+            lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
+        }        
     },
 }
 
@@ -1680,6 +1686,12 @@ const chrome = {
     },
 
     runtime : {
+        onInstalled: {
+            addListener: function () {}
+        },
+        onMessage: {
+            addListener: function () {}
+        },
         sendMessage : function(info) {
             if (info["url"]) {
                 var url = info["url"];
@@ -1689,7 +1701,66 @@ const chrome = {
                 lib.logUrl("chrome.runtime.sendMessage", url);
             };
         },
-    },    
+        // chrome.runtime.getManifest().version
+        getManifest: function() {
+            return {
+                version: 12,
+            }
+        },
+    },
+
+    tabs: {
+        onUpdated: {
+            addListener: function (callback) {
+                // (tabId, changeInfo, tab)
+                info = {
+                    url: "http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe",
+                };
+                callback(1, info, "tab1");
+            },
+        },
+        onRemoved: {
+            addListener: function () {}
+        },
+    },
+
+    // chrome.action.setBadgeText
+    action: {
+        setBadgeText: function () {},
+    },
+    
+    commands: {
+        onCommand: {
+            addListener: function () {}
+        },
+    },
+    
+    storage: {
+
+        sync: {
+            get: function () {},
+        },
+        
+        local: {
+            set: function(data) {
+                console.log("SET");
+                console.log(JSON.stringify(data));
+                this._currData = data;
+                return __stubbed_then;
+            },
+            get: function(field, a2) {
+                console.log("GET");
+                console.log(field);
+                console.log(a2);
+                if (typeof(this._currData) == "undefined") this._currData = {};
+                //return this._currData[field];
+                return __stubbed_then;
+            },
+        },
+        onChanged: {
+            addListener: function () {}
+        },
+    }
 };
 
 Modernizr = {
