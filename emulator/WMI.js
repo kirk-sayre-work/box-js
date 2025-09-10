@@ -7,6 +7,7 @@ const freeSpace = Math.floor(Math.random() * diskSize);
 
 // Note: all fields MUST be in lowercase!
 const processes = JSON.parse(fs.readFileSync(path.join(__dirname, "processes.json"), "utf8"));
+processes.__name = "Win32_Process";
 const tables = {
     antivirusproduct: [],
     win32_computersystemproduct: [],
@@ -221,12 +222,14 @@ const classes = {
 	},
     }),
     win32_processstartup: new Proxy({
-	spawninstance_: () => {}
+	spawninstance_: () => {
+	    return {};
+	}
     }, {
 	get(target, _prop) {
 	    const prop = _prop.toLowerCase();
 	    if (prop in target) return target[prop];
-	    lib.kill(`Win32_Process.${prop} not implemented!`);
+	    lib.kill(`Win32_ProcessStartup.${prop} not implemented!`);
 	},
     })
 }
