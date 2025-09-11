@@ -1940,6 +1940,10 @@ console.error = console.log;
 const TextEncoder = nodeUtil.TextEncoder;
 const TextDecoder = nodeUtil.TextDecoder;
 
+// **********
+// Stubbed Node-JS functions.
+// **********
+
 // Stubbed Node process package.
 var process = {
     // For debugging.
@@ -1963,6 +1967,16 @@ function _execSync(command, options) {
     logIOC('process execSync()/exec()', {command: command, options: options}, "The script spawned a process with execSync() or exec().");
     return "exec command results.";
 }
+
+function _createConnection(info) {
+    logIOC('net createConnection()', info, "The script made a network connection with net.createConnection().");
+    return {
+        setNoDelay: function () {},
+        on: function () {},
+    };
+}
+
+function _Socket() {};
 
 // Stubbed Node http package.
 var _http = {
