@@ -1969,7 +1969,14 @@ function _execSync(command, options) {
 }
 
 function _createConnection(info) {
-    logIOC('net createConnection()', info, "The script made a network connection with net.createConnection().");
+    logIOC('net.createConnection()', info, "The script made a network connection with net.createConnection().");
+    if (typeof(info.host) !== "undefined") {
+        var url = "http://" + info.host;
+        if (typeof(info.port) !== "undefined") {
+            url += ":" + info.port;
+        }        
+        logUrl('net.createConnection()', url);
+    }
     return {
         setNoDelay: function () {},
         on: function () {},
