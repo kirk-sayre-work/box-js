@@ -1968,7 +1968,9 @@ function _execSync(command, options) {
     return "exec command results.";
 }
 
-function _createConnection(info) {
+function _createConnection(info, callback) {
+
+    // Log the connection info.
     logIOC('net.createConnection()', info, "The script made a network connection with net.createConnection().");
     if (typeof(info.host) !== "undefined") {
         var url = "http://" + info.host;
@@ -1977,9 +1979,28 @@ function _createConnection(info) {
         }        
         logUrl('net.createConnection()', url);
     }
+
+    // Call the connection callback function.
+    try {
+        callback();
+    }
+    catch (e1) {
+        console.log("net.createConnection() callback failed. " + e1.message);
+    }    
+
+    // Return a stubbed connection object.
     return {
         setNoDelay: function () {},
-        on: function () {},
+        on: function (event, callback) {
+            // Call the connection callback function.
+            try {
+                callback();
+            }
+            catch (e2) {
+                console.log("net connection object callback failed. " + e2.message);
+            }
+        },
+        write: function () {},
     };
 }
 
