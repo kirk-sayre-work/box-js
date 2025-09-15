@@ -1152,10 +1152,10 @@ class XMLHttpRequest {
         this._onreadystatechange = func;
         if (typeof(func) !== "undefined") {
             try {
-                func("fake");
+                func(this);
             }
             catch (e) {
-                lib.info("Callback function execution failed. Continuing analysis anyway.");
+                lib.info("Callback function execution failed. Continuing analysis anyway. " + e);
             }
         }
     };
