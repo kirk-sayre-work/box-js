@@ -1226,7 +1226,7 @@ function ActiveXObject(name) {
     if (name.match("xmlhttp") || name.match("winhttprequest")) {
         return require("./emulator/XMLHTTP");
     }
-    if (name.match("domdocument")) {
+    if ((name.match("domdocument")) || (name.match("xmldom"))) {
 	return _makeDomDocument();
     }
     if (name.match("dom")) {
