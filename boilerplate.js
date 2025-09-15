@@ -1155,7 +1155,7 @@ class XMLHttpRequest {
                 func(this);
             }
             catch (e) {
-                lib.info("Callback function execution failed. Continuing analysis anyway. " + e);
+                logIOC("XmlHttpRequest.onreadystatechange()", "" + e, "Callback function execution failed. Continuing analysis anyway.");
             }
         }
     };
