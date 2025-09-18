@@ -64,6 +64,7 @@ const dummyEvent = {
     key: 97, // "a"
 
     stopPropagation: function() {},
+    stopImmediatePropagation: function() {},
     preventDefault: function() {},
     composedPath: function() {
         return {
