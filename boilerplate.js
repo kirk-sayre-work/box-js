@@ -71,6 +71,7 @@ const dummyEvent = {
             includes: function() { return false; },
         };
     },
+    path: "I'm an event path!",
     data: {
 	type: "???",
     },
