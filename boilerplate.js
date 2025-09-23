@@ -64,12 +64,14 @@ const dummyEvent = {
     key: 97, // "a"
 
     stopPropagation: function() {},
+    stopImmediatePropagation: function() {},
     preventDefault: function() {},
     composedPath: function() {
         return {
             includes: function() { return false; },
         };
     },
+    path: "I'm an event path!",
     data: {
 	type: "???",
     },
