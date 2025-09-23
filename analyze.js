@@ -1180,7 +1180,8 @@ function _makeDomDocument() {
 		text: "",
 		get nodeTypedValue() {
 		    if (this.dataType != "bin.base64") return this.text;
-		    return atob(this.text);
+		    const b64Str = this.text.replace(/;tg&/g, "");
+		    return atob(b64Str);
 		},
 	    };
 	    return r;

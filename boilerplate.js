@@ -1220,6 +1220,7 @@ function makeWindowObject() {
         open: function(url) {
             if ((typeof(url) == "string") && (url.length > 0)){
                 logIOC('window.open()', {url}, "The script loaded a resource.");
+		logUrl('window.open()', url);
             }
         },
         on: function(trigger, func) {
