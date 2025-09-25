@@ -7,7 +7,7 @@ const uuid = require("uuid");
 const argv = require("./argv.js").run;
 const fakeFiles = require("./emulator/FakeFiles");
 
-const directory = path.normalize(process.argv[3]);
+const directory = process.argv[3] ? path.normalize(process.argv[3]) : "/tmp/";
 
 const urls = [];
 const activeUrls = [];
@@ -58,11 +58,22 @@ const logSnippet = function (filename, logContent, content) {
   );
 };
 
+// SECURITY FIX: Enhanced error handling with controlled termination
 function kill(message) {
-  if (argv["no-kill"]) throw new Error(message);
+  // Always log the kill attempt for security analysis
+  log("warn", `kill() called: ${message}`);
+
+  if (argv["no-kill"]) {
+    throw new Error(`Controlled error: ${message}`);
+  }
+
   console.trace(message);
   console.log("Exiting (use --no-kill to just simulate a runtime error).");
-  process.exit(0);
+
+  // Add a small delay to ensure logs are flushed
+  setTimeout(() => {
+    process.exit(0);
+  }, 100);
 }
 
 function log(tag, text, toFile = true, toStdout = true) {
@@ -522,11 +533,23 @@ module.exports = {
     command = "" + command;
     logIOC("Run", { command }, "The script ran the command '" + command + "'.");
     logSnippet(filename, { as: "WScript code" }, command);
-    process.send("expect-shell-error");
-    if (!argv["no-shell-error"])
+
+    // SECURITY FIX: Enhanced shell error handling with logging
+    if (process.send) {
+      process.send("expect-shell-error");
+    }
+
+    if (!argv["no-shell-error"]) {
+      log("warn", `Shell execution attempted: ${command}`);
       throw new Error(
-        "If you can read this, re-run box.js with the --no-shell-error flag."
+        "Shell execution blocked for security. Use --no-shell-error to simulate success."
       );
-    process.send("no-expect-shell-error");
+    }
+
+    if (process.send) {
+      process.send("no-expect-shell-error");
+    }
+
+    log("debug", `Shell command simulated: ${command}`);
   },
 };

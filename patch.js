@@ -283,16 +283,21 @@ Function.toString = () => _OriginalFunction.toString();
 Function.valueOf = () => _OriginalFunction.valueOf();
 
 if (typeof String !== 'undefined' && String.prototype) {
-  String.prototype.xstrx = function () {
-    const hex = this.valueOf();
-    var str = "";
-    for (let i = 0; i < hex.length; i += 2) {
-      const hexValue = hex.substr(i, 2);
-      const decimalValue = parseInt(hexValue, 16);
-      str += String.fromCharCode(decimalValue);
-    }
-    return str;
-  };
+  Object.defineProperty(String.prototype, 'xstrx', {
+    value: function () {
+      const hex = this.valueOf();
+      var str = "";
+      for (let i = 0; i < hex.length; i += 2) {
+        const hexValue = hex.substr(i, 2);
+        const decimalValue = parseInt(hexValue, 16);
+        str += String.fromCharCode(decimalValue);
+      }
+      return str;
+    },
+    writable: false,
+    enumerable: false,
+    configurable: false
+  });
 }
 
 // Track the values of elements set by JQuery $("#q").val(...) uses.
@@ -300,25 +305,40 @@ var jqueryVals = {};
 
 // Fake up JQuery $("#q").val(...) uses.
 if (typeof String !== 'undefined' && String.prototype) {
-  String.prototype.val = function (value) {
-    if (!this.startsWith("#")) return;
-    logIOC(
-      "JQuery",
-      value,
-      'The script used JQuery $("#q").val(...) to set an element.'
-    );
-    var name = this.slice(1);
-    jqueryVals[name] = value;
-  };
+  Object.defineProperty(String.prototype, 'val', {
+    value: function (value) {
+      if (!this.startsWith("#")) return;
+      logIOC(
+        "JQuery",
+        value,
+        'The script used JQuery $("#q").val(...) to set an element.'
+      );
+      var name = this.slice(1);
+      jqueryVals[name] = value;
+    },
+    writable: false,
+    enumerable: false,
+    configurable: false
+  });
 
   // Fake up JQuery $("#q").fadeIn(...) uses.
-  String.prototype.fadeIn = function () {};
+  Object.defineProperty(String.prototype, 'fadeIn', {
+    value: function () {},
+    writable: false,
+    enumerable: false,
+    configurable: false
+  });
 }
 
 if (typeof Object !== 'undefined' && Object.prototype) {
-  Object.prototype.replace = function () {
-    return "";
-  };
+  Object.defineProperty(Object.prototype, 'replace', {
+    value: function () {
+      return "";
+    },
+    writable: false,
+    enumerable: false,
+    configurable: false
+  });
 }
 
 constructor.prototype.bind = function (context, func) {

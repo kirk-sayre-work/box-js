@@ -12,6 +12,7 @@ const argv = require("./argv.js").run;
 const jsdom = require("jsdom").JSDOM;
 const dom = new jsdom(`<html><head></head><body></body></html>`);
 const { DOMParser } = require("xmldom");
+const stripComments = require("strip-comments");
 
 const filename = process.argv[2];
 
@@ -101,27 +102,6 @@ function stripSingleLineComments(s) {
   return r;
 }
 
-function isCodeLine(line) {
-  // Check if a line contains actual JavaScript code (not just comments/whitespace)
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-
-  // Skip lines that are only comments
-  if (trimmed.startsWith("//")) return false;
-  if (trimmed.startsWith("/*") && trimmed.endsWith("*/")) return false;
-
-  // Look for JavaScript keywords, operators, or structure
-  const jsPatterns = [
-    /\b(function|var|let|const|if|else|for|while|try|catch|return|new|this)\b/,
-    /[{}();=+\-*/<>!&|]/,
-    /\.\w+\s*\(/, // method calls
-    /\w+\s*[=:]/, // assignments
-    /\w+\(/, // function calls
-  ];
-
-  return jsPatterns.some((pattern) => pattern.test(trimmed));
-}
-
 function isAlphaNumeric(str) {
   var code, i;
 
@@ -136,142 +116,6 @@ function isAlphaNumeric(str) {
     return false;
   }
   return true;
-}
-
-function smartStripComments(s) {
-  // This function is designed to handle heavily commented samples better
-  // than the original hideStrs() comment removal
-
-  // First, handle line-by-line processing for mixed code/comment lines
-  const lines = s.split("\n");
-  const processedLines = [];
-  let inMultiLineDeclaration = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    // Skip empty lines and lines that are just whitespace
-    if (!line.trim()) {
-      processedLines.push("");
-      inMultiLineDeclaration = false;
-      continue;
-    }
-
-    // Check if this line contains actual code
-    if (isCodeLine(line)) {
-      // For lines with code, try to preserve the code part while removing comments
-      // Handle inline /* */ comments
-      let processed = line;
-
-      // Remove inline /* */ comments but be careful about strings
-      let inString = false;
-      let stringChar = "";
-      let result = "";
-      let j = 0;
-
-      while (j < processed.length) {
-        const char = processed[j];
-        const nextChar = processed[j + 1];
-
-        // Track string boundaries
-        if (!inString && (char === '"' || char === "'" || char === "`")) {
-          inString = true;
-          stringChar = char;
-          result += char;
-          j++;
-          continue;
-        } else if (
-          inString &&
-          char === stringChar &&
-          processed[j - 1] !== "\\"
-        ) {
-          inString = false;
-          stringChar = "";
-          result += char;
-          j++;
-          continue;
-        }
-
-        // If we're in a string, just copy the character
-        if (inString) {
-          result += char;
-          j++;
-          continue;
-        }
-
-        // Look for /* comment start
-        if (char === "/" && nextChar === "*") {
-          // Find the end of the comment
-          let commentEnd = processed.indexOf("*/", j + 2);
-          if (commentEnd !== -1) {
-            // Skip the entire comment
-            j = commentEnd + 2;
-            continue;
-          } else {
-            // Comment doesn't end on this line, keep the rest
-            break;
-          }
-        }
-
-        // Look for // comment start
-        if (char === "/" && nextChar === "/") {
-          // Rest of line is a comment
-          break;
-        }
-
-        result += char;
-        j++;
-      }
-
-      // Check if this line starts or continues a multi-line declaration
-      const trimmedResult = result.trim();
-
-      // If the previous line ended with a comma, we're in a multi-line declaration
-      if (i > 0) {
-        const prevProcessedLine = processedLines[i - 1];
-        if (prevProcessedLine && prevProcessedLine.trim().endsWith(",")) {
-          inMultiLineDeclaration = true;
-        }
-      }
-
-      // Check if this line starts a new declaration
-      if (trimmedResult.match(/^\s*(var|let|const)\s+/)) {
-        inMultiLineDeclaration = true;
-      }
-
-      // Only add var if not in a multi-line declaration and other conditions are met
-      const equalIndex = trimmedResult.indexOf("=");
-      const beforeEqual =
-        equalIndex > 0 ? trimmedResult.substring(0, equalIndex) : trimmedResult;
-
-      if (
-        trimmedResult &&
-        /^\w+\s*=\s*/.test(trimmedResult) &&
-        !trimmedResult.startsWith("var ") &&
-        !trimmedResult.startsWith("let ") &&
-        !trimmedResult.startsWith("const ") &&
-        !beforeEqual.includes(".") && // Not a property assignment
-        !beforeEqual.includes("[") && // Not an array element assignment
-        !inMultiLineDeclaration // Not part of a multi-line declaration
-      ) {
-        // Add var declaration
-        result = result.replace(/^(\s*)(\w+)/, "$1var $2");
-      }
-
-      // Check if this line ends the declaration (semicolon ends it)
-      if (trimmedResult.endsWith(";")) {
-        inMultiLineDeclaration = false;
-      }
-
-      processedLines.push(result.trim() ? result : "");
-    } else {
-      // This line is comment-only or whitespace, skip it
-      processedLines.push("");
-      inMultiLineDeclaration = false;
-    }
-  }
-
-  return processedLines.join("\n");
 }
 
 function hideStrs(s) {
@@ -298,8 +142,8 @@ function hideStrs(s) {
   var inSquareBrackets = false;
   var skippedSpace = false;
 
-  // Use smarter comment stripping for heavily commented samples
-  s = smartStripComments(s);
+  // Use reliable comment stripping with strip-comments library
+  s = stripComments(s);
 
   // For debugging.
   var window = "               ";
@@ -342,12 +186,8 @@ function hideStrs(s) {
     //window = window.slice(1,) + currChar;
     //console.log(window);
 
-    // Since we've already handled comments in smartStripComments(),
-    // we can simplify the comment detection here
+    // Comment detection for remaining edge cases
     var oldInComment = inComment;
-
-    // We still need basic comment detection for remaining edge cases
-    // but it should be much simpler now
     inComment =
       inComment ||
       (prevChar == "/" &&
@@ -657,6 +497,7 @@ function rewrite(code, useException = false) {
   //console.log(code);
   //console.log("!!!! CODE: 0 !!!!");
 
+
   // box-js is assuming that the JS will be run on Windows with cscript or wscript.
   // Neither of these engines supports strict JS mode, so remove those calls from
   // the code.
@@ -808,22 +649,8 @@ If you run into unexpected results, try uncommenting lines that look like
         });
       } catch (e) {
         if (useException) {
-          lib.warning(`Parse error in dynamic code: ${e.message}`);
-          if (code.length < 500) {
-            lib.warning(`Full code snippet: ${code.replace(/\r?\n/g, "\\n")}`);
-          } else {
-            lib.warning(
-              `Code snippet (first 200 chars): ${code
-                .substring(0, 200)
-                .replace(/\r?\n/g, "\\n")}`
-            );
-            lib.warning(
-              `Code snippet (last 200 chars): ${code
-                .substring(code.length - 200)
-                .replace(/\r?\n/g, "\\n")}`
-            );
-          }
-
+          // Don't use lib.warning here as this function might be called from sandbox context
+          // where lib is not available. The sandbox rewrite function will handle logging.
           return 'throw("Parse Error")';
         }
         lib.error("Couldn't parse with Acorn:");
@@ -1285,6 +1112,8 @@ var wscript_proxy = new Proxy(
 );
 
 const sandbox = {
+  // Inject lib for sandbox functions to use
+  lib: lib,
   // Mock event object for browser compatibility - uses Proxy for dynamic event types
   event: new Proxy(
     {
@@ -1360,19 +1189,22 @@ const sandbox = {
     lib.verbose("setInterval called, scheduling callback execution");
     const intervalId = Math.floor(Math.random() * 1000);
 
+    // Capture lib reference for use in async callback
+    const capturedLib = lib;
+
     // Use setTimeout to allow the interval ID to be assigned first
     setTimeout(() => {
       if (typeof func === "function") {
         try {
           func();
         } catch (e) {
-          lib.verbose("setInterval callback error: " + e.message);
+          capturedLib.verbose("setInterval callback error: " + e.message);
         }
       } else if (typeof func === "string") {
         try {
           eval(func);
         } catch (e) {
-          lib.verbose("setInterval string callback error: " + e.message);
+          capturedLib.verbose("setInterval string callback error: " + e.message);
         }
       }
     }, 0);
@@ -1463,6 +1295,7 @@ const sandbox = {
         sandbox.location.href = value;
       }
     },
+    frames: [], // Array of frames in this window (empty for top-level window)
   },
   alert: (x) => {
     lib.info("Displayed alert(" + x + ")");
@@ -1595,12 +1428,9 @@ const sandbox = {
   parse: (x) => {},
   rewrite: (code, log = false) => {
     const ret = rewrite(code, (useException = true));
-    if (log) lib.logJS(ret);
+    // Note: Can't use lib functions here as lib is not available in sandbox context
     // If rewrite failed and returned a parse error, return original code to avoid crashing
     if (ret === 'throw("Parse Error")') {
-      lib.warning(
-        `Main rewrite failed for code snippet, returning original code`
-      );
       // For now, just return the original code - the main script analysis
       // still has proper loop rewriting, this is just for dynamic eval'd snippets
       return code;
@@ -1980,14 +1810,16 @@ const sandbox = {
 
           // Execute callbacks for behavioral analysis (like patch.js does)
           if (callback) {
+            // Capture lib reference for use in async callback
+            const capturedLib = lib;
             try {
               setTimeout(() => {
-                lib.verbose(`Executing ${event} handler for element ${id}`);
+                capturedLib.verbose(`Executing ${event} handler for element ${id}`);
                 if (typeof callback === "function") {
                   callback();
                 } else if (typeof callback === "string") {
                   // Execute string callbacks as JavaScript (real browser behavior)
-                  lib.verbose(
+                  capturedLib.verbose(
                     `Executing string callback: ${callback.substring(0, 100)}${
                       callback.length > 100 ? "..." : ""
                     }`
@@ -2427,20 +2259,24 @@ sandbox.window = sandbox.window;
 // which can be kinda messy with Proxies
 require("util").inspect.defaultOptions.customInspect = false;
 
+// SECURITY FIX: Dangerous-vm flag disabled for security
 if (argv["dangerous-vm"]) {
-  lib.verbose("Analyzing with native vm module (dangerous!)");
-  const vm = require("vm");
-  //console.log(code);
-  vm.runInNewContext(code, sandbox, {
-    displayErrors: true,
-    // lineOffset: -fs.readFileSync(path.join(__dirname, "patch.js"), "utf8").split("\n").length,
-    filename: "sample.js",
-  });
+  lib.warning("The dangerous-vm flag has been disabled for security reasons.");
+  lib.warning("All analysis now uses vm2 sandboxing for safety.");
+  // Original dangerous code commented out:
+  // const vm = require("vm");
+  // vm.runInNewContext(code, sandbox, {
+  //   displayErrors: true,
+  //   filename: "sample.js",
+  // });
 } else {
   lib.debug("Analyzing with vm2 v" + require("vm2/package.json").version);
 
   // Add self reference (equivalent to window in browsers) - needed for some malware samples
   sandbox.self = sandbox;
+
+  // Add top reference (references the topmost window) - needed for frame detection checks
+  sandbox.top = sandbox.window;
 
   const vm = new VM({
     timeout: (argv.timeout || 10) * 1000,
@@ -2472,25 +2308,113 @@ if (argv["dangerous-vm"]) {
     "\nif (typeof listenerCallbacks === 'undefined') { var listenerCallbacks = []; }\nif (typeof dummyEvent === 'undefined') { var dummyEvent = {}; }\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
   //console.log(code);
 
-  // More secure custom eval that validates through vm2 first, then applies rewriting
-  sandbox.eval = function (code) {
-    if (arguments.length === 0) return undefined;
-    code = `${code}`;
+  // Enhanced eval implementation captures lib reference while preserving malware behaviour within vm2
+  const evalFunction = (function(libRef, rewriteRef, vmRef) {
+    return function (code) {
+      if (arguments.length === 0) return undefined;
 
-    // First validate the code through vm2's native eval for security checks
-    try {
-      vm.run(`(function(){ eval(${JSON.stringify(code)}); })()`);
-    } catch (e) {
-      throw e; // Re-throw validation errors
+      // Convert to string for consistency with native eval
+      code = `${code}`;
+
+      try {
+        libRef.debug(`eval() called with: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`);
+
+        // Rewrite the code for safe execution
+        const rewrittenCode = rewriteRef(code, true);
+        return vmRef.run(rewrittenCode);
+      } catch (e) {
+        libRef.warning(`eval() execution failed: ${e.message}`);
+        throw e;
+      }
+    };
+  })(lib, rewrite, vm);
+
+  // Assign eval function to sandbox and make it available for dynamic access
+  sandbox.eval = evalFunction;
+
+  // Ensure eval is accessible via global object for dynamic access like global["eval"]
+  sandbox.global = sandbox;
+
+  // Make sure common global names also point to our eval
+  // This handles cases where malware gets the global object and accesses eval dynamically
+  const originalThis = sandbox;
+  sandbox.constructor = sandbox;
+
+  // Generic fallback mechanism: if execution fails during rewrite mode, retry with --no-rewrite
+  let shouldTryFallback = !argv["no-rewrite"]; // Only fallback if we're currently using rewrite
+
+  // Install a temporary uncaught exception handler for async errors
+  const originalHandler = process.listeners('uncaughtException').slice();
+  const tempHandler = (error) => {
+    if (shouldTryFallback) {
+      lib.warning(`Execution failed during rewrite mode: ${error.message}`);
+      lib.warning("Falling back to --no-rewrite mode");
+      shouldTryFallback = false; // Prevent infinite fallback loops
+
+      // Restore original handlers
+      process.removeAllListeners('uncaughtException');
+      originalHandler.forEach(handler => process.on('uncaughtException', handler));
+
+      // Try with no-rewrite
+      try {
+        const originalCode = fs.readFileSync(filename, "utf8");
+        const fallbackVm = new VM({
+          timeout: (argv.timeout || 10) * 1000,
+          sandbox,
+        });
+        fallbackVm.run(originalCode);
+        lib.info("Fallback execution successful");
+        return;
+      } catch (fallbackError) {
+        lib.error(`Fallback execution also failed: ${fallbackError.message}`);
+        process.exit(1);
+      }
     }
 
-    // If validation passed, run our rewritten version for proper scope access
-    const rewrittenCode = rewrite(code, true);
-    return vm.run(rewrittenCode);
+    // Re-throw other errors or if fallback is not applicable
+    throw error;
   };
+
+  if (shouldTryFallback) {
+    process.prependListener('uncaughtException', tempHandler);
+  }
 
   try {
     vm.run(code);
+  } catch (error) {
+    // Generic fallback for any synchronous execution error during rewrite mode
+    if (shouldTryFallback) {
+      lib.warning(`Execution failed during rewrite mode: ${error.message}`);
+      lib.warning("Falling back to --no-rewrite mode");
+      shouldTryFallback = false; // Prevent infinite fallback loops
+
+      // Restore async error handlers
+      if (process.listeners('uncaughtException').includes(tempHandler)) {
+        process.removeListener('uncaughtException', tempHandler);
+        originalHandler.forEach(handler => process.on('uncaughtException', handler));
+      }
+
+      try {
+        // Try running the original code without rewriting
+        const originalCode = fs.readFileSync(filename, "utf8");
+        const fallbackVm = new VM({
+          timeout: (argv.timeout || 10) * 1000,
+          sandbox,
+        });
+
+        fallbackVm.run(originalCode);
+        lib.info("Fallback execution successful");
+        return; // Exit successfully from fallback
+      } catch (fallbackError) {
+        lib.error(`Fallback execution also failed: ${fallbackError.message}`);
+        throw error; // Re-throw original error
+      }
+    } else {
+      throw error; // Re-throw if fallback not applicable
+    }
+  }
+
+  try {
 
     // After the main script execution, check for and execute dynamic scripts
     if (sandbox.dynamicScripts && sandbox.dynamicScripts.length > 0) {
@@ -2686,14 +2610,20 @@ function ActiveXObject(name) {
       return require("./emulator/ScheduleService");
     case "system.text.asciiencoding":
       return require("./emulator/AsciiEncoding");
-    case "system.security.cryptography.frombase64transform":
-      return require("./emulator/Base64Transform");
-    case "system.io.memorystream":
-      return require("./emulator/MemoryStream");
-    case "system.runtime.serialization.formatters.binary.binaryformatter":
-      return require("./emulator/BinaryFormatter");
-    case "system.collections.arraylist":
-      return require("./emulator/ArrayList");
+	case "system.security.cryptography.frombase64transform":
+		return require("./emulator/Base64Transform");
+	case "system.security.cryptography.rijndaelmanaged":
+		return require("./emulator/SystemSecurityCryptographyRijndaelManaged")();
+	case "system.security.cryptography.sha256managed":
+		return require("./emulator/SystemSecurityCryptographySHA256Managed")();
+	case "system.io.memorystream":
+		return require("./emulator/MemoryStream");
+	case "system.runtime.serialization.formatters.binary.binaryformatter":
+		return require("./emulator/BinaryFormatter");
+	case "system.collections.arraylist":
+		return require("./emulator/ArrayList");
+	case "system.text.utf8encoding":
+		return require("./emulator/SystemTextUTF8Encoding")();
     default:
       lib.kill(`Unknown ActiveXObject ${name}`);
       break;
