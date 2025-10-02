@@ -1216,6 +1216,11 @@ const sandbox = {
     lib.verbose("clearInterval called with id: " + id);
   },
   setTimeout: function (func, time) {
+    // Default timeout to 0 if not provided
+    if (time === undefined) {
+      time = 0;
+    }
+
     // The interval should be an int, so do a basic check for int.
     if (typeof time !== "number" || time == null) {
       throw "time is not a number.";
@@ -1224,8 +1229,12 @@ const sandbox = {
     // Just call the function immediately, no waiting.
     if (typeof func === "function") {
       func();
+    } else if (typeof func === "string") {
+      // Handle string code execution like eval
+      lib.logJS("setTimeout", func);
+      sandbox.eval(func);
     } else {
-      throw "Callback must be a function";
+      throw "Callback must be a function or string";
     }
   },
   logJS: lib.logJS,
