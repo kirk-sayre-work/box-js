@@ -2258,6 +2258,17 @@ const sandbox = {
       `Script attempted to resize window to ${width}x${height}`
     );
   },
+  BroadcastChannel: function (channelName) {
+    lib.verbose(`BroadcastChannel created with name: ${channelName}`);
+    lib.logIOC(
+      "BroadcastChannel",
+      { channelName },
+      `Script created BroadcastChannel: ${channelName}`
+    );
+    // Return a plain object that can have properties set on it
+    // This allows the malware to use Object.defineProperty on onmessage
+    return {};
+  },
 };
 
 // Make window available as a global by assigning it as a direct property
