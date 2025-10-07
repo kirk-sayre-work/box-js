@@ -1382,6 +1382,14 @@ wprentals_map_general_cluster = function() {};
 wprentals_map_general_spiderfy = function() {};
 wpestate_initialize_poi = function() {};
 Codevz_Plus = {};
+classList = {
+    add: function() {},
+    remove: function() {},
+    trigger: function() {},
+    toggle: function() {},
+    special: {},
+}
+style = {};
 
 // Initial stubbed function. Add items a needed.
 function adjustIframes() {};
@@ -1511,6 +1519,10 @@ jQuery.expr = {
 jQuery.getJSON = function(url) {
     logIOC('JQuery.getJSON()', {url}, "The script called JQuery.getJSON()");
     logUrl('JQuery.getJSON()', url);
+};
+jQuery.get = function(url) {
+    logIOC('JQuery.get()', {url}, "The script called JQuery.get()");
+    logUrl('JQuery.get()', url);
 };
 // Looks like that can be a window field.
 window.jQuery = jQuery
@@ -2130,3 +2142,9 @@ Node = {
     __name: "Node",
     "TEXT_NODE" : 3,
 };
+
+// Lottie animation library stubbing.
+lottie = {
+    loadAnimation: function() {},
+};
+check_loader = "";
