@@ -789,6 +789,26 @@ cc decoder.c -o decoder
     return code;
 }
 
+// Just check the syntax of the JS sample and exit?
+if (argv["check"]) {
+    try {
+        let tree = acorn.parse(code, {
+            ecmaVersion: "latest",
+            allowReturnOutsideFunction: true, // used when rewriting function bodies
+            plugins: {
+                // enables acorn plugin needed by prototype rewrite
+                JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
+            },
+        });
+	console.log("JS syntax is valid.");
+	process.exit(0);
+    } catch (e) {
+	console.log("JS syntax is invalid.");
+	console.log(e);
+	process.exit(1);
+    }        
+}
+
 // Extract the actual code to analyze from conditional JScript
 // comments if needed.
 if (argv["extract-conditional-code"]) {
