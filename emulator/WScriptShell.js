@@ -18,6 +18,7 @@ function WScriptShell() {
 	os: "Windows_NT",
 	processor_revision: "0209",
 	processor_architecture: "x86",
+        processor_architew6432: "AMD64",
 	programdata: "C:\\ProgramData",
 	systemroot: "C:\\WINDOWS",
 	//tmp: "C:\\DOCUME~1\\User\\LOCALS~1\\Temp",
