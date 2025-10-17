@@ -1194,6 +1194,7 @@ function mapCLSID(clsid) {
 
 function _makeDomDocument() {
     const r = {
+        __name: "_makeDomDocument()",
         createElement: function(tag) {
 	    const r = {
 		dataType: "??",
@@ -1206,6 +1207,24 @@ function _makeDomDocument() {
 	    };
 	    return r;
 	},
+        loadXML: function(s) {
+            try {
+		// Save the XML as a dropped file.
+		if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
+		this._num_xml_files++;
+		lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
+                this.document = new DOMParser().parseFromString(s);
+                this.documentElement = this.document.documentElement;
+                this.documentElement.document = this.document;
+                this.documentElement.createElement = function(tag) {
+                    var r = this.document.createElement(tag);
+                    r.text = "";
+                    return r;
+                };
+                return true;
+            }
+            catch (e) { return false; };
+        },
     };
     return r;
 }
@@ -1248,10 +1267,12 @@ function ActiveXObject(name) {
         return require("./emulator/XMLHTTP");
     }
     if ((name.match("domdocument")) || (name.match("xmldom"))) {
-	return _makeDomDocument();
+	const r = _makeDomDocument();
+        return r;
     }
     if (name.match("dom")) {
         const r = {
+            __name: "dom",
             createElement: function(tag) {
                 var r = this.document.createElement(tag);
                 r.text = "";
