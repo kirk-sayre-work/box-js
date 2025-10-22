@@ -221,12 +221,14 @@ const classes = {
 	},
     }),
     win32_processstartup: new Proxy({
-	spawninstance_: () => {}
+	spawninstance_: () => {
+	    return {};
+	}
     }, {
 	get(target, _prop) {
 	    const prop = _prop.toLowerCase();
 	    if (prop in target) return target[prop];
-	    lib.kill(`Win32_Process.${prop} not implemented!`);
+	    lib.kill(`Win32_ProcessStartup.${prop} not implemented!`);
 	},
     })
 }
@@ -338,7 +340,7 @@ module.exports.GetObject = function(name) {
 
     // Track URLs from 'script:...' GetObject() creations.
     const lname = name.toLowerCase();
-    if (lname.startsWith("script:http")) {
+    if (lname.startsWith("script:http") || lname.startsWith("scriptlet:http")) {
         const url = lname.replace("script:http", "http");
 	lib.logUrl("GetObject()", url);
         lib.logIOC("GetObject()", url, "The script used WMI to download a remote object.");

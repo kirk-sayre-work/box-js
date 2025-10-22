@@ -251,6 +251,12 @@
             "name": "use-old-date",
             "type": "Boolean",
             "description": "Lie about the current date/time and return an old date."
+        },
+	{
+            "name": "check",
+            "alias": "c",
+            "type": "Boolean",
+            "description": "Just check the JS syntax of the sample and exit."
         }
     ],
     "export": [

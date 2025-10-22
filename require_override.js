@@ -12,6 +12,10 @@ function require(arg) {
 	    exec: _execSync,
 	},
 	"http" : _http,
+        "net" : {
+            createConnection: _createConnection,
+            Socket: _Socket,
+        },
     }
     if (typeof overrides[arg] !== "undefined") return overrides[arg];
     return _origRequire(arg);

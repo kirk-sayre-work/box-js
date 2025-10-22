@@ -61,12 +61,14 @@ const dummyEvent = {
     key: 97, // "a"
 
     stopPropagation: function() {},
+    stopImmediatePropagation: function() {},
     preventDefault: function() {},
     composedPath: function() {
         return {
             includes: function() { return false; },
         };
     },
+    path: "I'm an event path!",
     data: {
 	type: "???",
     },
@@ -417,8 +419,9 @@ function __makeFakeElem(data) {
         }
         return __createElement("FAKEELEM");
     };
-    
+
     var fakeDict = {
+        "contentDocument" : document,
         "appendChild" : func,
         "insertBefore" : func,
         "parentNode" : {
@@ -493,6 +496,7 @@ var __fakeParentElem = undefined;
 var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
+        "contentDocument" : document,
 	myType: "Element",
         set src(url) {
 
@@ -556,9 +560,9 @@ function __createElement(tag) {
             this.attributes[name] = val;
 
             // Setting the source of an element to (maybe) a URL?
-            if (name === "src") {
+            if ((name === "src") || (name === "href")) {
                 if (val.startsWith("//")) val = "https:" + val;
-                logIOC('Element Source', {val}, "The script set the src field of an element.");
+                logIOC('Element Source', {val}, "The script set the src or href field of an element.");
 	        logUrl('Element Source', val);
             }
         },
@@ -595,6 +599,13 @@ function __createElement(tag) {
         select: function() {
             __currSelectedVal = this.val;
         },
+	setSelectionRange: function() {
+	    // Do we have an element value that might get selected?
+	    if (typeof(this.attributes["value"]) !== "undefined") {
+		this.val = this.attributes["value"];
+		__currSelectedVal = this.val;
+	    }
+	},
         cloneNode: function() {
             //// Actually clone the element (deep copy).
             //return JSON.parse(JSON.stringify(this));
@@ -670,6 +681,7 @@ function __createElement(tag) {
             add: function() {},
             remove: function() {},
             trigger: function() {},
+	    toggle: function() {},
             // Trivial stubbing. Just say nothing is in the class
             // list. May need a flag to control this.
             contains: function(x) { return false; },
@@ -690,6 +702,14 @@ function __createElement(tag) {
             logIOC('Element Text', {d}, "The script changed textContent of an element.");
         },
         focus: function() {},
+        getBoundingClientRect: function() {
+            return {
+                top: 100,
+                bottom: 200,
+                left: 100,
+                right: 200,
+            };
+        },
     };
     fake_elem["contentWindow"] = {
         document: document,
@@ -703,7 +723,12 @@ __fakeParentElem = __createElement("FakeParentElem");
 // function passed to the then().
 const __stubbed_then = {
     then: function(f) {
-	f();
+        try {
+	    f("fake");
+        }
+        catch (e) {
+            lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
+        }
     },
 }
 
@@ -938,6 +963,7 @@ var document = {
         return __createElement("__doc_fragment__");
     },
     createElement: __createElement,
+    createElementNS: __createElement,
     createTextNode: function(text) {},
     addEventListener: function(tag, func) {
         if (typeof(func) === "undefined") return;
@@ -1049,10 +1075,10 @@ class XMLHttpRequest {
         this._onreadystatechange = func;
         if (typeof(func) !== "undefined") {
             try {
-                func("fake");
+                func(this);
             }
             catch (e) {
-                lib.info("Callback function execution failed. Continuing analysis anyway.");
+                logIOC("XmlHttpRequest.onreadystatechange()", "" + e, "Callback function execution failed. Continuing analysis anyway.");
             }
         }
     };
@@ -1110,6 +1136,7 @@ function makeWindowObject() {
         open: function(url) {
             if ((typeof(url) == "string") && (url.length > 0)){
                 logIOC('window.open()', {url}, "The script loaded a resource.");
+		logUrl('window.open()', url);
             }
         },
         on: function(trigger, func) {
@@ -1544,10 +1571,16 @@ const chrome = {
     extension: {
         onMessage: {
             addListener: function () {}
-        },            
+        },
     },
 
     runtime : {
+        onInstalled: {
+            addListener: function () {}
+        },
+        onMessage: {
+            addListener: function () {}
+        },
         sendMessage : function(info) {
             if (info["url"]) {
                 var url = info["url"];
@@ -1557,7 +1590,66 @@ const chrome = {
                 lib.logUrl("chrome.runtime.sendMessage", url);
             };
         },
-    },    
+        // chrome.runtime.getManifest().version
+        getManifest: function() {
+            return {
+                version: 12,
+            }
+        },
+    },
+
+    tabs: {
+        onUpdated: {
+            addListener: function (callback) {
+                // (tabId, changeInfo, tab)
+                info = {
+                    url: "http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe",
+                };
+                callback(1, info, "tab1");
+            },
+        },
+        onRemoved: {
+            addListener: function () {}
+        },
+    },
+
+    // chrome.action.setBadgeText
+    action: {
+        setBadgeText: function () {},
+    },
+
+    commands: {
+        onCommand: {
+            addListener: function () {}
+        },
+    },
+
+    storage: {
+
+        sync: {
+            get: function () {},
+        },
+
+        local: {
+            set: function(data) {
+                console.log("SET");
+                console.log(JSON.stringify(data));
+                this._currData = data;
+                return __stubbed_then;
+            },
+            get: function(field, a2) {
+                console.log("GET");
+                console.log(field);
+                console.log(a2);
+                if (typeof(this._currData) == "undefined") this._currData = {};
+                //return this._currData[field];
+                return __stubbed_then;
+            },
+        },
+        onChanged: {
+            addListener: function () {}
+        },
+    }
 };
 
 Modernizr = {};
@@ -1751,6 +1843,45 @@ function _execSync(command, options) {
     return "exec command results.";
 }
 
+// Stubbed Node net module functions.
+function _createConnection(info, callback) {
+
+    // Log the connection info.
+    logIOC('net.createConnection()', info, "The script made a network connection with net.createConnection().");
+    if (typeof(info.host) !== "undefined") {
+        var url = "http://" + info.host;
+        if (typeof(info.port) !== "undefined") {
+            url += ":" + info.port;
+        }
+        logUrl('net.createConnection()', url);
+    }
+
+    // Call the connection callback function.
+    try {
+        callback();
+    }
+    catch (e1) {
+        console.log("net.createConnection() callback failed. " + e1.message);
+    }
+
+    // Return a stubbed connection object.
+    return {
+        setNoDelay: function () {},
+        on: function (event, callback) {
+            // Call the connection callback function.
+            try {
+                callback();
+            }
+            catch (e2) {
+                console.log("net connection object callback failed. " + e2.message);
+            }
+        },
+        write: function () {},
+    };
+}
+
+function _Socket() {};
+
 // Stubbed Node http package.
 var _http = {
     request: function (url, options) {
@@ -1819,3 +1950,35 @@ _W = {
         return this._securePrefix;
     },
 }
+
+// MSC (Microsoft Console File) exploit handling JS.
+// https://vipre.com/blog/exploiting-microsoft-console-files/?srsltid=AfmBOor7f23IhqGeBT449rXd5hUCuboeencbv-J44b7Ik8CB_8dXq1Qs
+var external = {
+    Document: {
+	ScopeNamespace: {
+	    GetRoot: function() {},
+	    GetChild: function() {},
+	    GetNext: function() {},
+	},
+	ActiveView: {
+	    ControlObject: ActiveXObject("dom"),
+	},
+    }
+};
+
+// Stubbed MutationObserver class.
+class MutationObserver {
+    constructor() {};
+    observe() {};
+};
+
+// Node constants.
+Node = {
+    "TEXT_NODE" : 3,
+};
+
+// Lottie animation library stubbing.
+lottie = {
+    loadAnimation: function() {},
+};
+check_loader = "";

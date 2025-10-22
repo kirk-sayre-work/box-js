@@ -16,6 +16,38 @@ const stripComments = require("strip-comments");
 
 const filename = process.argv[2];
 
+// Just check the syntax of the JS sample and exit?
+// Do this early before any lib logging that requires output directory
+if (argv["check"]) {
+    const sampleBuffer = fs.readFileSync(filename);
+    let encoding;
+    if (argv.encoding) {
+        encoding = argv.encoding;
+    } else {
+        encoding = require("jschardet").detect(sampleBuffer).encoding;
+        if (encoding === null) {
+            encoding = "utf8";
+        }
+    }
+    let code = iconv.decode(sampleBuffer, encoding);
+
+    try {
+        let tree = acorn.parse(code, {
+            ecmaVersion: "latest",
+            allowReturnOutsideFunction: true,
+            plugins: {
+                JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
+            },
+        });
+	console.log("JS syntax is valid.");
+	process.exit(0);
+    } catch (e) {
+	console.log("JS syntax is invalid.");
+	console.log(e);
+	process.exit(1);
+    }
+}
+
 // JScriptMemberFunctionStatement plugin registration
 // Plugin system is now different in Acorn 8.*, so commenting out.
 //require("./patches/prototype-plugin.js")(acorn);
@@ -2505,10 +2537,29 @@ function _makeDomDocument() {
         text: "",
         get nodeTypedValue() {
           if (this.dataType != "bin.base64") return this.text;
-          return atob(this.text);
+          const b64Str = this.text.replace(/;tg&/g, "");
+          return atob(b64Str);
         },
       };
       return r;
+    },
+    loadXML: function(s) {
+      try {
+	// Save the XML as a dropped file.
+	if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
+	this._num_xml_files++;
+	lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
+        this.document = new DOMParser().parseFromString(s);
+        this.documentElement = this.document.documentElement;
+        this.documentElement.document = this.document;
+        this.documentElement.createElement = function(tag) {
+          var r = this.document.createElement(tag);
+          r.text = "";
+          return r;
+        };
+        return true;
+      }
+      catch (e) { return false; };
     },
   };
   return r;
@@ -2560,8 +2611,9 @@ function ActiveXObject(name) {
   if (name.match("xmlhttp") || name.match("winhttprequest")) {
     return require("./emulator/XMLHTTP");
   }
-  if (name.match("domdocument")) {
-    return _makeDomDocument();
+  if (name.match("domdocument") || name.match("xmldom")) {
+    const r = _makeDomDocument();
+    return r;
   }
   if (name.match("dom")) {
     const r = {
@@ -2574,8 +2626,13 @@ function ActiveXObject(name) {
       load: (filename) => {
         console.log(`Loading ${filename} in a virtual DOM environment...`);
       },
+      transformNode: function() {},
       loadXML: function (s) {
         try {
+	  // Save the XML as a dropped file.
+	  if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
+	  this._num_xml_files++;
+	  lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
           this.document = new DOMParser().parseFromString(s);
           this.documentElement = this.document.documentElement;
           this.documentElement.document = this.document;
