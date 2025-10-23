@@ -150,6 +150,191 @@ function isAlphaNumeric(str) {
   return true;
 }
 
+const __timeoutTracker = Object.create(null);
+
+function createFetchResponse(url, buffer, status, statusText, headers) {
+  const headerMap = headers || {};
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    url,
+    headers: {
+      get(name) {
+        if (!name) return null;
+        return headerMap[name.toLowerCase()] || null;
+      },
+      has(name) {
+        if (!name) return false;
+        return Object.prototype.hasOwnProperty.call(
+          headerMap,
+          name.toLowerCase()
+        );
+      },
+    },
+    text() {
+      return Promise.resolve(buffer.toString("utf8"));
+    },
+    json() {
+      return new Promise((resolve, reject) => {
+        try {
+          resolve(JSON.parse(buffer.toString("utf8")));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    },
+    arrayBuffer() {
+      const view = buffer.buffer.slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength
+      );
+      return Promise.resolve(view);
+    },
+    blob() {
+      const type = headerMap["content-type"] || "application/octet-stream";
+      try {
+        return Promise.resolve(new sandbox.Blob([buffer], { type }));
+      } catch (e) {
+        lib.verbose(`Failed to create Blob from fetch response: ${e.message}`);
+        return Promise.resolve({ parts: [buffer], options: { type } });
+      }
+    },
+    clone() {
+      return createFetchResponse(
+        url,
+        Buffer.from(buffer),
+        status,
+        statusText,
+        Object.assign({}, headerMap)
+      );
+    },
+  };
+}
+
+function emulateFetch(input, init) {
+  const options = init || {};
+  const url = typeof input === "string" ? input : "" + input;
+  const method = (options.method || "GET").toUpperCase();
+  const headers = options.headers || {};
+  const body = options.body;
+  lib.verbose(`fetch() stub invoked for ${method} ${url}`);
+  lib.logIOC(
+    "fetch",
+    { url, method, headers },
+    "The script fetch()ed a URL."
+  );
+  lib.logUrl("fetch", url);
+  return new Promise((resolve) => {
+    let response;
+    try {
+      response = lib.fetchUrl(method, url, headers, body);
+    } catch (e) {
+      lib.warning(`fetch() emulation failed: ${e.message}`);
+      resolve(
+        createFetchResponse(
+          url,
+          Buffer.alloc(0),
+          500,
+          "Emulated fetch failure",
+          {}
+        )
+      );
+      return;
+    }
+    const status = argv["fake-download"] ? 200 : argv.download ? 200 : 404;
+    const statusText = status === 200 ? "OK" : "Not Found";
+    const buffer =
+      response && Buffer.isBuffer(response.body)
+        ? response.body
+        : Buffer.from((response && response.body) || "");
+    const headersLower = {};
+    if (response && response.headers) {
+      for (const key of Object.keys(response.headers)) {
+        headersLower[key.toLowerCase()] = response.headers[key];
+      }
+    }
+    resolve(createFetchResponse(url, buffer, status, statusText, headersLower));
+  });
+}
+
+function queueInlineScript(source, code) {
+  if (typeof code !== "string") return;
+  const trimmed = code.trim();
+  if (!trimmed) return;
+  lib.verbose(
+    `Executing inline script from ${source} (${trimmed.length} bytes)`
+  );
+  lib.logIOC(
+    "DOM Script",
+    { source, length: trimmed.length },
+    "The script executed inline script content."
+  );
+  const logged = lib.logJS(code);
+  if (typeof sandbox.dynamicScripts === "undefined") {
+    sandbox.dynamicScripts = [];
+  }
+  sandbox.dynamicScripts.push(logged);
+}
+
+function handleDomAppend(element, source) {
+  if (typeof element === "object" && element !== null) {
+    const tagName = element.tagName
+      ? String(element.tagName).toLowerCase()
+      : undefined;
+    const logData = {
+      type: tagName || element.myType || "object",
+    };
+    if (typeof element.textContent === "string") {
+      logData.textLength = element.textContent.length;
+    }
+    if (typeof element.innerHTML === "string" && element.innerHTML.length) {
+      logData.htmlLength = element.innerHTML.length;
+    }
+    if (typeof element.src === "string" && element.src) {
+      const normalizedSrc = element.src.startsWith("//")
+        ? `https:${element.src}`
+        : element.src;
+      logData.src = normalizedSrc;
+      if (tagName === "script") {
+        lib.logIOC(
+          "ScriptSrc",
+          { url: normalizedSrc, tag: element.tagName },
+          `Script element loads external JavaScript from: ${normalizedSrc}`
+        );
+      } else {
+        lib.logUrl(`${tagName || "element"}.src`, normalizedSrc);
+      }
+    }
+    lib.logIOC(
+      "DOM Write",
+      logData,
+      "The script appended an HTML node to the DOM"
+    );
+    const inlineCode =
+      typeof element.textContent === "string" && element.textContent.trim()
+        ? element.textContent
+        : typeof element.innerHTML === "string"
+        ? element.innerHTML
+        : "";
+    queueInlineScript(source, inlineCode);
+  } else if (typeof element === "string") {
+    lib.logIOC(
+      "DOM Write",
+      { type: "string", length: element.length },
+      "The script appended an HTML node to the DOM"
+    );
+    queueInlineScript(source, element);
+  } else if (typeof element !== "undefined") {
+    lib.logIOC(
+      "DOM Write",
+      { type: typeof element },
+      "The script appended an HTML node to the DOM"
+    );
+  }
+  return element;
+}
+
 function hideStrs(s) {
   var inStrSingle = false;
   var inStrDouble = false;
@@ -239,9 +424,10 @@ function hideStrs(s) {
       }
 
       // Out of comment?
-      if (prevChar == "*" && currChar == "/" && !skippedSpace) {
+      if (prevChar == "*" && currChar == "/") {
         inComment = false;
         justExitedComment = true;
+        skippedSpace = false;
       }
 
       // Keep going until we leave the comment
@@ -529,7 +715,7 @@ function rewrite(code, useException = false) {
   //console.log(code);
   //console.log("!!!! CODE: 0 !!!!");
 
-
+  
   // box-js is assuming that the JS will be run on Windows with cscript or wscript.
   // Neither of these engines supports strict JS mode, so remove those calls from
   // the code.
@@ -568,7 +754,7 @@ function rewrite(code, useException = false) {
     code = code.toString().replace(rvaluePat, ";// ASSIGNING TO RVALUE");
 
     // Now unhide the string literals.
-    code = unhideStrs(code, strMap);
+   code = unhideStrs(code, strMap);
   }
   //console.log("!!!! CODE: 3 !!!!");
   //console.log(code);
@@ -1247,27 +1433,43 @@ const sandbox = {
     // No-op since we execute callbacks immediately
     lib.verbose("clearInterval called with id: " + id);
   },
-  setTimeout: function (func, time) {
-    // Default timeout to 0 if not provided
-    if (time === undefined) {
-      time = 0;
+  setTimeout: function (func, time, ...args) {
+    let delay = Number(time);
+    if (time === undefined || Number.isNaN(delay)) {
+      delay = 0;
     }
 
-    // The interval should be an int, so do a basic check for int.
-    if (typeof time !== "number" || time == null) {
-      throw "time is not a number.";
+    let callback = func;
+    if (typeof callback === "string") {
+      const code = callback;
+      callback = function () {
+        const logged = lib.logJS(code);
+        sandbox.eval(logged);
+      };
     }
 
-    // Just call the function immediately, no waiting.
-    if (typeof func === "function") {
-      func();
-    } else if (typeof func === "string") {
-      // Handle string code execution like eval
-      lib.logJS("setTimeout", func);
-      sandbox.eval(func);
-    } else {
-      throw "Callback must be a function or string";
+    if (typeof callback !== "function") {
+      lib.warning("setTimeout called with invalid handler");
+      return Math.floor(Math.random() * 1000);
     }
+
+    const key = callback.toString();
+    __timeoutTracker[key] = (__timeoutTracker[key] || 0) + 1;
+    if (__timeoutTracker[key] > 300) {
+      lib.verbose("Recursive setTimeout() loop detected. Breaking loop.");
+      return Math.floor(Math.random() * 1000);
+    }
+
+    try {
+      callback.apply(null, args);
+    } catch (e) {
+      lib.warning(`setTimeout callback failed: ${e}`);
+    }
+
+    return Math.floor(Math.random() * 1000);
+  },
+  clearTimeout: function (id) {
+    lib.verbose("clearTimeout called with id: " + id);
   },
   logJS: lib.logJS,
   logIOC: lib.logIOC,
@@ -1683,7 +1885,24 @@ const sandbox = {
         style: {},
         download: "",
         async: false,
-        appendChild: function () {},
+        _textContent: "",
+        _innerHTML: "",
+        get textContent() {
+          return this._textContent || "";
+        },
+        set textContent(value) {
+          this._textContent = value == null ? "" : String(value);
+        },
+        get innerHTML() {
+          return this._innerHTML || "";
+        },
+        set innerHTML(value) {
+          this._innerHTML = value == null ? "" : String(value);
+        },
+        appendChild: function (child) {
+          handleDomAppend(child, `${tag}.appendChild`);
+          return child;
+        },
         parentNode: null,
         setAttribute: function (name, value) {
           lib.verbose(
@@ -1889,21 +2108,7 @@ const sandbox = {
                 newNode.tagName || "element"
               } before ${referenceNode.tagName || "element"}`
             );
-            if (newNode.src) {
-              // For script elements, only log as IOC, not URL
-              if (
-                newNode.tagName &&
-                newNode.tagName.toLowerCase() === "script"
-              ) {
-                lib.logIOC(
-                  "ScriptSrc",
-                  { url: newNode.src, tag: newNode.tagName },
-                  `Script element loads external JavaScript from: ${newNode.src}`
-                );
-              } else {
-                lib.logUrl(`${newNode.tagName || "element"}.src`, newNode.src);
-              }
-            }
+            handleDomAppend(newNode, "document.parentNode.insertBefore");
             return newNode;
           },
           appendChild: function (newNode) {
@@ -1912,21 +2117,7 @@ const sandbox = {
                 newNode.tagName || "element"
               }`
             );
-            if (newNode.src) {
-              // For script elements, only log as IOC, not URL
-              if (
-                newNode.tagName &&
-                newNode.tagName.toLowerCase() === "script"
-              ) {
-                lib.logIOC(
-                  "ScriptSrc",
-                  { url: newNode.src, tag: newNode.tagName },
-                  `Script element loads external JavaScript from: ${newNode.src}`
-                );
-              } else {
-                lib.logUrl(`${newNode.tagName || "element"}.src`, newNode.src);
-              }
-            }
+            handleDomAppend(newNode, "document.parentNode.appendChild");
             return newNode;
           },
         },
@@ -1963,11 +2154,18 @@ const sandbox = {
     documentElement: {
       appendChild: function (element) {
         lib.verbose("document.documentElement.appendChild() called");
+        return handleDomAppend(
+          element,
+          "document.documentElement.appendChild"
+        );
       },
     },
     body: {
       innerHTML: "",
-      appendChild: function () {},
+      appendChild: function (element) {
+        lib.verbose("document.body.appendChild() called");
+        return handleDomAppend(element, "document.body.appendChild");
+      },
       onload: function () {
         lib.verbose("document.body.onload() called");
         return true;
@@ -2303,8 +2501,19 @@ const sandbox = {
   },
 };
 
-// Make window available as a global by assigning it as a direct property
-sandbox.window = sandbox.window;
+// Make window available as a global and expose fetch/timer helpers
+sandbox.fetch = emulateFetch;
+sandbox.clearTimeout = sandbox.clearTimeout;
+sandbox.window.fetch = emulateFetch;
+sandbox.window.setTimeout = sandbox.setTimeout;
+sandbox.window.clearTimeout = sandbox.clearTimeout;
+sandbox.window.setInterval = sandbox.setInterval;
+sandbox.window.clearInterval = sandbox.clearInterval;
+sandbox.globalThis = sandbox;
+sandbox.global = sandbox;
+lib.verbose(
+  `fetch availability: global ${typeof sandbox.fetch}, window ${typeof sandbox.window.fetch}`
+);
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
 // It will prevent console.log from calling the "inspect" property,

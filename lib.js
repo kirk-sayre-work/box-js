@@ -7,7 +7,19 @@ const uuid = require("uuid");
 const argv = require("./argv.js").run;
 const fakeFiles = require("./emulator/FakeFiles");
 
-const directory = process.argv[3] ? path.normalize(process.argv[3]) : "/tmp/";
+let directory = "/tmp/";
+if (process.argv[3]) {
+	const candidate = path.normalize(process.argv[3]);
+	try {
+		if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+			directory = candidate;
+		} else {
+			console.warn(`Warning: log directory ${candidate} is invalid, falling back to /tmp/`);
+		}
+	} catch (e) {
+		console.warn(`Warning: unable to access log directory ${candidate} (${e.message}), falling back to /tmp/`);
+	}
+}
 
 const urls = [];
 const activeUrls = [];
