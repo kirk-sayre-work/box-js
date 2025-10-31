@@ -94,6 +94,11 @@ class Blob {
                     flat.push(data[i][j]);
                 }
             }
+            if (typeof(data[i]) == "string") {
+                for (let j = 0; j < data[i].length; j++) {
+                    flat.push(data[i].charCodeAt(j));
+                }
+            }
         }
         if (!flat.some(i => (!Number.isInteger(i) || (i < 0) || (i > 255)))) {
             for (let i = 0; i < flat.length; i++) {
@@ -2148,3 +2153,10 @@ lottie = {
     loadAnimation: function() {},
 };
 check_loader = "";
+
+// Node.js process object stubbing.
+process.env = {
+    USERPROFILE : "C:\Users\YourUsername",    
+}
+process.platform = "win32";
+
