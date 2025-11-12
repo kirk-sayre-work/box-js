@@ -1254,10 +1254,14 @@ function ActiveXObject(name) {
         name_re = new RegExp(name, 'i');
         pos = rawcode.search(name_re);
         if (pos === -1) {
-            lib.logIOC("Obfuscated ActiveX Object",{name}, `The script created a new ActiveX object ${name}, but the string was not found in the source.`);
+	    if (name != "dom") {
+		lib.logIOC("Obfuscated ActiveX Object",{name}, `The script created a new ActiveX object ${name}, but the string was not found in the source.`);
+	    }
         }
         else {
-            lib.logIOC("ActiveX Object Created",{name}, `The script created a new ActiveX object ${name}`);
+	    if (name != "dom") {
+		lib.logIOC("ActiveX Object Created",{name}, `The script created a new ActiveX object ${name}`);
+	    }
         }
     }
 
