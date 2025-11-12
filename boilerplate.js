@@ -621,6 +621,9 @@ function __createElement(tag) {
         lastChild: {
             nodeType: 3,
         },
+	sandbox: {
+	    add: function() {},
+	},
         getElementsByTagName: __getElementsByTagName,
         getElementsByClassName: __getElementsByTagName,
         // Probably wrong, fix this if it causes problems.
