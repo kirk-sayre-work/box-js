@@ -360,7 +360,21 @@ function hideStrs(s) {
   var skippedSpace = false;
 
   // Use reliable comment stripping with strip-comments library
-  s = stripComments(s);
+  // NOTE: stripComments() can sometimes break valid JS (e.g., strings containing "//")
+  // Try it first, but fall back to original code if it breaks parsing
+  try {
+    const stripped = stripComments(s);
+    // Verify the stripped code is still valid JavaScript
+    acorn.parse(stripped, {
+      ecmaVersion: "latest",
+      allowReturnOutsideFunction: true,
+    });
+    // If parsing succeeded, use the stripped version
+    s = stripped;
+  } catch (e) {
+    // stripComments broke the code or code was already invalid
+    // Continue with original code - manual comment tracking below will handle it
+  }
 
   // For debugging.
   var window = "               ";
