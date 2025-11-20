@@ -2061,6 +2061,9 @@ var _http = {
     },
 };
 
+// Fake value for Node __dirname global variable.
+var __dirname = "C:/Users/legituser/Downloads"
+
 // Stubbed Components object.
 const _fakeComponentClass = {
     // For debugging.

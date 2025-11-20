@@ -16,6 +16,8 @@ function require(arg) {
             createConnection: _createConnection,
             Socket: _Socket,
         },
+        "request" : {
+        },
     }
     if (typeof overrides[arg] !== "undefined") return overrides[arg];
     return _origRequire(arg);
