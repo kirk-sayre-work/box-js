@@ -2166,3 +2166,44 @@ process.env = {
 }
 process.platform = "win32";
 
+// Don't allow overriding selected console methods.
+const _origConsole = console;
+var fakeConsole = {
+
+    get log() {
+        return _origConsole.log;
+    },
+    set log(a) {
+    },
+    get warn() {
+        return _origConsole.log;
+    },
+    set warn(a) {
+    },
+    get info() {
+        return _origConsole.log;
+    },
+    set info(a) {
+    },
+    get error() {
+        return _origConsole.log;
+    },
+    set error(a) {
+    },
+    get exception() {
+        return _origConsole.log;
+    },
+    set exception(a) {
+    },
+    get table() {
+        return _origConsole.log;
+    },
+    set table(a) {
+    },
+    get trace() {
+        return _origConsole.log;
+    },
+    set trace(a) {
+    },
+};
+console = fakeConsole;
