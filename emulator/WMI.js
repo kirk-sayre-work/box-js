@@ -20,6 +20,13 @@ const tables = {
     }],
     win32_diskdrive: [{
         deviceid: "C:",
+	model: "Seagate 8675",
+	interfacetype: "SCSI",
+	pnpdeviceid: "*PNP020a",
+	serialnumber: "WD-WL4492798726",
+    }],
+    win32_systemdriver: [{
+	name: "ionbucket",
     }],
     win32_computersystem : [{
         "pscomputername" : "USER-PC",
@@ -395,6 +402,25 @@ module.exports.GetObject = function(name) {
         AddressWidth: foo => {
             lib.logIOC("WMI.GetObject.AddressWidth", "", "The script checked processor address width with WMI.");
 	    return "64";
+	},
+	Open: arg => {
+	    lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open().");
+	},
+	LoadFromFile: arg => {
+	    lib.logIOC("WMI.GetObject.LoadFromFile", arg, "The script called WMI.GetObject.LoadFromFile().");
+	},
+	ReadText: arg => {
+	    lib.logIOC("WMI.GetObject.ReadText", arg, "The script called WMI.GetObject.ReadText().");
+	},
+	Close: function () {},
+	GetParentFolderName: function () {
+	    return "C:/Users/Sysop/Desktop/"
+	},
+	SaveToFile: function(fname) {
+	    lib.logIOC("WMI.GetObject.SaveToFile", fname, "The script called WMI.GetObject.SaveToFile().");
+	},
+	DeleteFile: function(fname) {
+	    lib.logIOC("WMI.GetObject.DeleteFile", fname, "The script called WMI.GetObject.DeleteFile().");
 	},
     }, {
 	get(target, name) {
