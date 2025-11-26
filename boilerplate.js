@@ -2166,6 +2166,10 @@ process.env = {
 }
 process.platform = "win32";
 
+// Node.js environment info.
+this.arch = "x64";
+this.path = "C:/Users/legituser/Downloads";
+
 // Don't allow overriding selected console methods.
 const _origConsole = console;
 var fakeConsole = {

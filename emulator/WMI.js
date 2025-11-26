@@ -404,7 +404,10 @@ module.exports.GetObject = function(name) {
 	    return "64";
 	},
 	Open: arg => {
-	    lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open().");
+	    lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open('" + arg + "').");
+	},
+        open: arg => {
+            lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open('" + arg + "').");
 	},
 	LoadFromFile: arg => {
 	    lib.logIOC("WMI.GetObject.LoadFromFile", arg, "The script called WMI.GetObject.LoadFromFile().");
@@ -421,6 +424,19 @@ module.exports.GetObject = function(name) {
 	},
 	DeleteFile: function(fname) {
 	    lib.logIOC("WMI.GetObject.DeleteFile", fname, "The script called WMI.GetObject.DeleteFile().");
+	},
+        MoveFile: function(src, dest) {
+	    lib.logIOC("WMI.GetObject.MoveFile", {src: src, dest: dest}, "The script called WMI.GetObject.MoveFile().");
+	},
+        ShellExecute: function(cmd) {
+	    lib.logIOC("WMI.GetObject.ShellExecute", cmd, "The script ran WMI.GetObject.ShellExecute('" + cmd + "').");
+	},
+        send: function(arg) {
+	    lib.logIOC("WMI.GetObject.send", arg, "The script ran WMI.GetObject.send('" + arg + "').");
+	},
+        getResponseHeader: function() {
+	    lib.info("The script ran WMI.GetObject.getResponseHeader().");
+            return "{header}"
 	},
     }, {
 	get(target, name) {
