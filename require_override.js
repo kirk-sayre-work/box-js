@@ -15,6 +15,7 @@ function require(arg) {
         "net" : {
             createConnection: _createConnection,
             Socket: _Socket,
+	    createServer: _createServer,
         },
         "request" : {
         },

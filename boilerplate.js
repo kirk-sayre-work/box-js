@@ -1,6 +1,7 @@
 const parse = require("node-html-parser").parse;
 const lib = require("./lib.js");
 const nodeCrypto = require('crypto').webcrypto;
+const fullCrypto = require('crypto')
 const nodeUtil = require('util');
 const { Buffer } = require('node:buffer');
 
@@ -1605,6 +1606,7 @@ function setTimeout(func, time) {
     const funcStr = ("" + func);
     if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
     if (timeoutFuncs[funcStr] > 300) {
+	console.log(funcStr);
         console.log("Recursive setTimeout() loop detected. Breaking loop.")
         return func;
     }
@@ -1991,6 +1993,7 @@ function _execSync(command, options) {
     return "exec command results.";
 }
 
+// Stubbed Node net function. See require_override.js.
 function _createConnection(info, callback) {
 
     // Log the connection info.
@@ -2027,7 +2030,22 @@ function _createConnection(info, callback) {
     };
 }
 
+// Stubbed Node net function. See require_override.js.
 function _Socket() {};
+
+// Stubbed Node net function. See require_override.js.
+function _createServer() {
+    return {
+	listen: function () {},
+	on: function () {},
+	close: function () {},
+	address: function () {
+	    return {
+		port: 80,
+	    }
+	},
+    };
+};
 
 // Stubbed Node http package.
 var _http = {
@@ -2137,6 +2155,9 @@ const crypto = {
 	    r.push(i);
 	}
 	return r;
+    },
+    createDecipheriv: function(a1, a2, a3, a4) {
+	return fullCrypto.createDecipheriv(a1, a2, a3, a4);
     }
 };
 
