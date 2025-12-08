@@ -2232,3 +2232,13 @@ var fakeConsole = {
     },
 };
 console = fakeConsole;
+
+// Cloudflare turnstile object?
+turnstile = {
+    render: function (unk1, config) {
+        if ((typeof(config) != "undefined") && (typeof(config.callback) == "function")) {
+            config.callback();
+        }
+    },
+    reset: function () {},
+}
