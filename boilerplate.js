@@ -456,7 +456,11 @@ function __makeFakeElem(data) {
         "title" : "My Fake Title",
         style: {},
         navigator: navigator,
-        getAttribute: function() { return {}; },
+        getAttribute: function() {
+	    return {
+		indexOf: function() { return -1; },
+	    };
+	},
         addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
@@ -1206,6 +1210,19 @@ dataLayer = [];
 
 class dummyClass {};
 
+// Stubbed intl-tel-input constructor (https://github.com/jackocnr/intl-tel-input).
+_intlTelInput = function () {
+    return {
+	getSelectedCountryData: function () {
+	    return {
+		iso2: "jp",
+		dialCode: "+54",
+	    };
+	},
+	
+    };
+};
+
 // Stubbed global window object.
 function makeWindowObject() {
     var window = {
@@ -1363,6 +1380,7 @@ window.String = String;
 window.RegExp = RegExp;
 window.JSON = JSON;
 window.Array = Array;
+window.intlTelInput = _intlTelInput;
 localStorage = _localStorage;
 top = window;
 // Probably not right, but gets addEventListener() method.
@@ -1404,12 +1422,27 @@ style = {};
 function adjustIframes() {};
 
 // Initial jQuery stubbing. Add items a needed.
+function serialize() { return '"nope"'; };
+function find() {
+    return {
+	is: function() { return false; },
+	val: function() {},
+	prop: function() {},
+    }
+};
 
 // Function form of jQuery().
 var funcDict = {
     // For debugging.
     __name: "funcDict",
-    on: function(){ return funcDict },
+    on: function(arg1, arg2) {
+	if (typeof(arg2) == "function") {
+	    arg2(dummyEvent);
+	};
+	return funcDict;
+    },
+    serialize: serialize,
+    find: find,
     val: function() { return "some@emailaddr.moe" },
     click: function(f) {
 	f(dummyEvent);
