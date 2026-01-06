@@ -1232,6 +1232,7 @@ function _makeDomDocument() {
 function ActiveXObject(name) {
 
     // Check for use of encoded ActiveX object names.
+    name = ("" + name).replace("[", "").replace("]", "");
     lib.verbose(`New ActiveXObject: ${name}`);
     if (argv["activex-as-ioc"]) {
         
@@ -1266,7 +1267,7 @@ function ActiveXObject(name) {
     }
 
     // Actually emulate the ActiveX object creation.
-    name = name.toLowerCase();
+    name = name.toLowerCase()
     if (name.match("xmlhttp") || name.match("winhttprequest")) {
         return require("./emulator/XMLHTTP");
     }
