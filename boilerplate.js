@@ -1238,6 +1238,10 @@ function makeWindowObject() {
         set park(val) {
             logIOC('Window Parking', val, "The script changed window.park.");
         },        
+	// Guess you can create ActiveX objects with a window method.
+	ActiveXObject: function(objName) {
+	    return ActiveXObject(objName);
+	},
         eval: function(cmd) { return eval(cmd); },
         execScript: function(cmd) {
             lib.runShellCommand(cmd);
