@@ -1749,7 +1749,9 @@ const chrome = {
 
     runtime : {
         onInstalled: {
-            addListener: function () {}
+            addListener: function (func) {
+                func({"reason" : "install"});
+            }
         },
         onMessage: {
             addListener: function () {}
@@ -1769,6 +1771,10 @@ const chrome = {
                 version: 12,
             }
         },
+        setUninstallURL: function (url) {
+            logIOC('chrome.runtime.setUninstallURL', {url}, "The script set the uninstall URL for an extension.");
+	    logUrl('chrome.runtime.setUninstallURL', url);
+        },
     },
 
     tabs: {
@@ -1784,6 +1790,7 @@ const chrome = {
         onRemoved: {
             addListener: function () {}
         },
+        create: function () {},
     },
 
     // chrome.action.setBadgeText
@@ -1805,15 +1812,13 @@ const chrome = {
         
         local: {
             set: function(data) {
-                console.log("SET");
-                console.log(JSON.stringify(data));
                 this._currData = data;
                 return __stubbed_then;
             },
             get: function(field, a2) {
-                console.log("GET");
-                console.log(field);
-                console.log(a2);
+                //console.log("GET");
+                //console.log(field);
+                //console.log(a2);
                 if (typeof(this._currData) == "undefined") this._currData = {};
                 //return this._currData[field];
                 return __stubbed_then;
@@ -2195,7 +2200,11 @@ const crypto = {
     },
     createDecipheriv: function(a1, a2, a3, a4) {
 	return fullCrypto.createDecipheriv(a1, a2, a3, a4);
-    }
+    },
+    randomUUID: function() {
+        // We want determistic analysis runs, so return a fixed UUID.
+        return "550e8400-e29b-41d4-a716-946658440103";
+    },
 };
 
 // Stubbed MutationObserver class.
