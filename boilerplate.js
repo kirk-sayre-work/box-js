@@ -773,6 +773,17 @@ const __stubbed_then = {
     },
 }
 
+// Fake up the on() method. This dict can be returned by methods
+// that use the a.b().on() pattern. Does nothing.
+const __stubbed_on = {
+    // For debugging.
+    __name: "__stubbed_on",
+    on: function(f) {
+        // Handle chaining.
+        return __stubbed_on;
+    },
+}
+
 // Track the current text in the clipboard.
 var __currClipboardData = "";
 
@@ -2019,11 +2030,22 @@ var process = {
     exit: function (code) {
 	logIOC('process exit()', {code}, "The script called process.exit().");
     },
+    on: function (signal, handler) {
+        handler();
+    },
 }
-
+    
 // Stubbed Node spawn() function.
 function _spawn(file, args) {
     logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
+    return {
+	unref: function () {},
+    };
+}
+
+// Stubbed Node fork() function.
+function _fork(file, args) {
+    logIOC('process fork()', {file: file, args: args}, "The script spawned a process with fork().");
     return {
 	unref: function () {},
     };
@@ -2119,6 +2141,49 @@ var _http = {
 	lib.logUrl('http.request()', url);
 	throw("Fake error");
     },
+    get: function(url, headers) {
+        logIOC('http.get()', {url: url, headers: headers}, "The script made a web request with http.get().");
+	lib.logUrl('http.get()', url);
+        return __stubbed_on;
+    },
+};
+
+// Stubbed Node socket.io-client function.
+function _io_client(url) {
+    logIOC('socket.io-client()', {url: url}, "The script opened a socket with socket.io-client().");
+    lib.logUrl('socket.io-client()', url);
+    return {
+        on: function (event, handler) {
+            handler();
+        },
+        emit: function () {},
+    }
+}
+
+// Stubbed Node axios functions.
+function _axiosPost(url, data, header) {
+    logIOC('axios.post()', {url: url, data: data, header: header}, "The script made a POST request with axios.post().");
+    lib.logUrl('axios.post()', url);
+    return {
+        "data" : "",
+    };
+}
+
+function _axiosGet(url) {
+    logIOC('axios.get()', {url: url}, "The script made a GET request with axios.get().");
+    lib.logUrl('axios.get()', url);
+    return {
+        "data" : "",
+    };
+}
+
+// Stubbed Node node-machine-id functions.
+function _machineId() {
+    return "124b0fe518564f7eebb6f2bfcdf20247fac0d6f34d670fb92e09a0fce8169365";
+};
+
+function _machineIdSync() {
+    return "86753094-cae9-5feb-2112-13f82a04f5e4";
 };
 
 // Fake value for Node __dirname global variable.

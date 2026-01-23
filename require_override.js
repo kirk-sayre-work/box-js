@@ -9,6 +9,7 @@ function require(arg) {
 	"child_process" : {
 	    execSync: _execSync,
 	    spawn: _spawn,
+            fork: _fork,
 	    exec: _execSync,
 	},
 	"http" : _http,
@@ -18,6 +19,17 @@ function require(arg) {
 	    createServer: _createServer,
         },
         "request" : {
+        },
+        "socket.io-client" : _io_client,
+        "axios" : {
+            post: _axiosPost,
+            get: _axiosGet,
+        },
+        "better-sqlite3" : {
+        },
+        "node-machine-id" : {
+            machineId : _machineId,
+            machineIdSync : _machineIdSync,
         },
     }
     if (typeof overrides[arg] !== "undefined") return overrides[arg];
