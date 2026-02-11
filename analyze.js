@@ -1275,6 +1275,15 @@ function ActiveXObject(name) {
 	const r = _makeDomDocument();
         return r;
     }
+    if (name.match("htmlfile")) {
+	const r = {
+            __name: "htmlfile",
+	    "parentWindow" : {
+		"clipboardData" : "Some data",
+	    },
+	};
+	return r;
+    }
     if (name.match("dom")) {
         const r = {
             __name: "dom",
