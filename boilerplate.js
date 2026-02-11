@@ -1253,6 +1253,7 @@ function makeWindowObject() {
 	ActiveXObject: function(objName) {
 	    return ActiveXObject(objName);
 	},
+	blur: function() {},
         eval: function(cmd) { return eval(cmd); },
         execScript: function(cmd) {
             lib.runShellCommand(cmd);
