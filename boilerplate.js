@@ -318,6 +318,9 @@ var __location = {
 	    url = "" + url;
 	    url = url.replace(/\r?\n/g, "");
 	    if (url.startsWith("file:")) return;
+            if (url.startsWith("//")) {
+                url = "https:" + url;
+            }
             this._href = url;
             logIOC('HREF Location', {url}, "The script changed location.href.");
 	    logUrl('HREF Location', url);
@@ -1259,6 +1262,8 @@ function makeWindowObject() {
             lib.runShellCommand(cmd);
         },
 	btoa: btoa,
+        // Don't know what this is, referenced in some phishing JS.
+        svne: "??",
         resizeTo: function(a,b){},
         moveTo: function(a,b){},
         open: function(url) {
