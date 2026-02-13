@@ -453,7 +453,7 @@ function __makeFakeElem(data) {
         "parentNode" : {
             "appendChild" : func,
             "insertBefore" : func,
-            removeChild: function () {},
+            removeChild: function () {return true;},
         },
         "getElementsByTagName" : __getElementsByTagName,
         "title" : "My Fake Title",
@@ -493,7 +493,7 @@ function __makeFakeElem(data) {
         },
         item: function() {},
 	click: function() {},
-        removeChild: function() {},
+        removeChild: function() {return true;},
 	remove: function() {},
         append: function() {
             return __createElement("__append__");
@@ -717,7 +717,7 @@ function __createElement(tag) {
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },        
-	removeChild: function() {},
+	removeChild: function() {return true;},
 	remove: function() {},
         "classList" : {
             add: function() {},
@@ -935,6 +935,11 @@ var document = {
             func(dummyEvent);
             listenerCallbacks.push(func);
         },
+        getComputedStyle: function(){
+            return {
+                getPropertyValue: function() { return "none"; },
+            };
+        },
     },
     set cookie(val) {
         this._cookie = val;
@@ -1014,7 +1019,9 @@ var document = {
         generatedElements[id] = r;
         return r;
     },
-    style: {},
+    style: {
+        "display" : "none",
+    },
     className: "",
     documentElement: {
         style: {},
@@ -1284,6 +1291,7 @@ function makeWindowObject() {
             return atob(s);
         },
         setTimeout: function(f, i) {
+            f();
 	},
         Date: Date,
         addEventListener: function(tag, func) {
