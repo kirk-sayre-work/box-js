@@ -362,17 +362,37 @@ function hideStrs(s) {
   // Use reliable comment stripping with strip-comments library
   // NOTE: stripComments() can sometimes break valid JS (e.g., strings containing "//")
   // Try it first, but fall back to original code if it breaks parsing
+  // Run in a child process with timeout to avoid hanging on large files.
   try {
-    const stripped = stripComments(s);
-    // Verify the stripped code is still valid JavaScript
-    acorn.parse(stripped, {
-      ecmaVersion: "latest",
-      allowReturnOutsideFunction: true,
-    });
-    // If parsing succeeded, use the stripped version
-    s = stripped;
+    const { execFileSync } = require("child_process");
+    const stripTimeout = (argv["strip-timeout"] || argv.timeout || 10) * 1000;
+    const childScript = `
+      const fs = require("fs");
+      const code = fs.readFileSync(process.argv[1], "utf8");
+      const stripComments = require("strip-comments");
+      const acorn = require("acorn");
+      const stripped = stripComments(code);
+      acorn.parse(stripped, { ecmaVersion: "latest", allowReturnOutsideFunction: true });
+      process.stdout.write(stripped);
+    `;
+    const osTmp = require("os");
+    const pathTmp = require("path");
+    const tmpFile = pathTmp.join(osTmp.tmpdir(), "boxjs-strip-" + process.pid + ".js");
+    require("fs").writeFileSync(tmpFile, s);
+    try {
+      s = execFileSync("node", ["-e", childScript, tmpFile], {
+        timeout: stripTimeout,
+        maxBuffer: 1024 * 1024 * 50,
+        encoding: "utf8",
+      });
+    } finally {
+      try { require("fs").unlinkSync(tmpFile); } catch (_) {}
+    }
   } catch (e) {
-    // stripComments broke the code or code was already invalid
+    if (e.killed || e.signal === "SIGTERM") {
+      lib.warning(`Comment stripping timed out after ${(argv["strip-timeout"] || argv.timeout || 10)}s, skipping.`);
+    }
+    // stripComments broke the code, timed out, or code was already invalid
     // Continue with original code - manual comment tracking below will handle it
   }
 
@@ -729,7 +749,8 @@ function rewrite(code, useException = false) {
   //console.log(code);
   //console.log("!!!! CODE: 0 !!!!");
 
-  
+  if (argv["no-rewrite"]) return code;
+
   // box-js is assuming that the JS will be run on Windows with cscript or wscript.
   // Neither of these engines supports strict JS mode, so remove those calls from
   // the code.
@@ -854,67 +875,57 @@ If you run into unexpected results, try uncommenting lines that look like
     }
   }
 
-  if (!argv["no-rewrite"]) {
-    try {
-      lib.verbose("Rewriting code...", false);
-      if (argv["dumb-concat-simplify"]) {
-        lib.verbose(
-          '    Simplifying "dumb" concatenations (remove --dumb-concat-simplify to skip)...',
-          false
-        );
-        code = code.replace(/'[ \r\n]*\+[ \r\n]*'/gm, "");
-        code = code.replace(/"[ \r\n]*\+[ \r\n]*"/gm, "");
-      }
+  try {
+    lib.verbose("Rewriting code...", false);
+    if (argv["dumb-concat-simplify"]) {
+      lib.verbose(
+        '    Simplifying "dumb" concatenations (remove --dumb-concat-simplify to skip)...',
+        false
+      );
+      code = code.replace(/'[ \r\n]*\+[ \r\n]*'/gm, "");
+      code = code.replace(/"[ \r\n]*\+[ \r\n]*"/gm, "");
+    }
 
-      let tree;
-      try {
-        //console.log("!!!! CODE FINAL !!!!");
-        //console.log(code);
-        //console.log("!!!! CODE FINAL !!!!");
-        tree = acorn.parse(code, {
-          ecmaVersion: "latest",
-          allowReturnOutsideFunction: true, // used when rewriting function bodies
-          plugins: {
-            // enables acorn plugin needed by prototype rewrite
-            JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
-          },
-        });
-      } catch (e) {
-        if (useException) {
-          // Don't use lib.warning here as this function might be called from sandbox context
-          // where lib is not available. The sandbox rewrite function will handle logging.
-          return 'throw("Parse Error")';
-        }
-        lib.error("Couldn't parse with Acorn:");
-        lib.error(e);
-        lib.error("");
-        if (filename.match(/jse$/)) {
-          lib.error(
-            `This appears to be a JSE (JScript.Encode) file.
+    let tree;
+    try {
+      //console.log("!!!! CODE FINAL !!!!");
+      //console.log(code);
+      //console.log("!!!! CODE FINAL !!!!");
+      tree = acorn.parse(code, {
+        ecmaVersion: "latest",
+        allowReturnOutsideFunction: true, // used when rewriting function bodies
+        plugins: {
+          // enables acorn plugin needed by prototype rewrite
+          JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
+        },
+      });
+    } catch (e) {
+      if (useException) {
+        // Don't use lib.warning here as this function might be called from sandbox context
+        // where lib is not available. The sandbox rewrite function will handle logging.
+        return 'throw("Parse Error")';
+      }
+      lib.error("Couldn't parse with Acorn:");
+      lib.error(e);
+      lib.error("");
+      if (filename.match(/jse$/)) {
+        lib.error(
+          `This appears to be a JSE (JScript.Encode) file.
 Please compile the decoder and decode it first:
 
 cc decoder.c -o decoder
 ./decoder ${filename} ${filename.replace(/jse$/, "js")}
 
 `
-          );
-        } else {
-          lib.error(
-            // @@@ Emacs JS mode does not properly parse this block.
-            //`This doesn't seem to be a JavaScript/WScript file.
-            //If this is a JSE file (JScript.Encode), compile
-            //decoder.c and run it on the file, like this:
-            //
-            //cc decoder.c -o decoder
-            //./decoder ${filename} ${filename}.js
-            //
-            //`
-            "Decode JSE. 'cc decoder.c -o decoder'. './decoder ${filename} ${filename}.js'"
-          );
-        }
-        process.exit(4);
-        return;
+        );
+      } else {
+        lib.error(
+          "Decode JSE. 'cc decoder.c -o decoder'. './decoder ${filename} ${filename}.js'"
+        );
       }
+      process.exit(4);
+      return;
+    }
 
       // Loop rewriting is looking for loops in the original unmodified code so
       // do this before any other modifications.
@@ -941,7 +952,8 @@ cc decoder.c -o decoder
         );
         const unsafe = !!argv["unsafe-preprocess"];
         lib.debug("Unsafe preprocess: " + unsafe);
-        const result = require("uglify-es").minify(code, {
+        const preprocessTimeout = (argv["preprocess-timeout"] || argv.timeout || 10) * 1000;
+        const uglifyOptions = {
           parse: {
             bare_returns: true, // used when rewriting function bodies
           },
@@ -988,14 +1000,46 @@ cc decoder.c -o decoder
             beautify: true,
             comments: true,
           },
-        });
-        if (result.error) {
-          lib.error(
-            "Couldn't preprocess with uglify-es: " +
-              JSON.stringify(result.error)
-          );
-        } else {
-          code = result.code;
+        };
+        try {
+          const { execFileSync } = require("child_process");
+          const childScript = `
+            const fs = require("fs");
+            const options = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const code = fs.readFileSync(process.argv[2], "utf8");
+            const result = require("uglify-es").minify(code, options);
+            if (result.error) {
+              process.stderr.write(JSON.stringify(result.error));
+              process.exit(1);
+            }
+            process.stdout.write(result.code);
+          `;
+          const os = require("os");
+          const path = require("path");
+          const fs = require("fs");
+          const tmpOpts = path.join(os.tmpdir(), `boxjs-uglify-opts-${process.pid}.json`);
+          const tmpCode = path.join(os.tmpdir(), `boxjs-uglify-code-${process.pid}.js`);
+          fs.writeFileSync(tmpOpts, JSON.stringify(uglifyOptions));
+          fs.writeFileSync(tmpCode, code);
+          try {
+            const output = execFileSync("node", ["-e", childScript, tmpOpts, tmpCode], {
+              timeout: preprocessTimeout,
+              maxBuffer: 1024 * 1024 * 50,
+              encoding: "utf8",
+            });
+            code = output;
+          } finally {
+            try { fs.unlinkSync(tmpOpts); } catch (_) {}
+            try { fs.unlinkSync(tmpCode); } catch (_) {}
+          }
+        } catch (e) {
+          if (e.killed || e.signal === "SIGTERM") {
+            lib.warning(`Preprocessing timed out after ${preprocessTimeout / 1000}s, skipping.`);
+          } else if (e.status === 1 && e.stderr) {
+            lib.error("Couldn't preprocess with uglify-es: " + e.stderr);
+          } else {
+            lib.warning("Preprocessing skipped: " + e.message);
+          }
         }
       }
 
@@ -1109,9 +1153,28 @@ cc decoder.c -o decoder
         process.exit(3);
       }
     }
-  }
 
   return code;
+}
+
+// Just check the syntax of the JS sample and exit?
+if (argv["check"]) {
+    try {
+        let tree = acorn.parse(code, {
+            ecmaVersion: "latest",
+            allowReturnOutsideFunction: true, // used when rewriting function bodies
+            plugins: {
+                // enables acorn plugin needed by prototype rewrite
+                JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
+            },
+        });
+	console.log("JS syntax is valid.");
+	process.exit(0);
+    } catch (e) {
+	console.log("JS syntax is invalid.");
+	console.log(e);
+	process.exit(1);
+    }        
 }
 
 // Extract the actual code to analyze from conditional JScript
@@ -1346,6 +1409,30 @@ var wscript_proxy = new Proxy(
 const sandbox = {
   // Inject lib for sandbox functions to use
   lib: lib,
+  // Proxy for Components.classes - created here in host context because
+  // vm2 >=3.10.4 disables Proxy inside the sandbox to prevent escape via
+  // handler leakage. Boilerplate.js references this as __componentClassesProxy.
+  __componentClassesProxy: new Proxy({}, {
+    get: (target, name) => {
+      // Returns a stubbed component class for any property access.
+      // The actual _fakeComponentClass is defined in boilerplate.js,
+      // so return a minimal stub here; boilerplate.js will override
+      // Components.classes with the full version if available.
+      return {
+        getService: function() {
+          return {
+            getCharPref: function() {},
+            setCharPref: function() {},
+            newURI: function(url) {
+              lib.logUrl('Components.classes["..."].getService().newURI()', url);
+            },
+            getCodebasePrincipal: function() {},
+            getLocalStorageForPrincipal: function() {},
+          };
+        },
+      };
+    }
+  }),
   // Mock event object for browser compatibility - uses Proxy for dynamic event types
   event: new Proxy(
     {
@@ -2752,8 +2839,9 @@ function mapCLSID(clsid) {
   }
 }
 
-function _makeDomDocument() {
+function _makeDomDocument(originalName) {
   const r = {
+    __name: originalName || "_makeDomDocument()",
     createElement: function (tag) {
       const r = {
         dataType: "??",
@@ -2790,6 +2878,7 @@ function _makeDomDocument() {
 
 function ActiveXObject(name) {
   // Check for use of encoded ActiveX object names.
+  name = ("" + name).replace("[", "").replace("]", "");
   lib.verbose(`New ActiveXObject: ${name}`);
   if (argv["activex-as-ioc"]) {
     // Handle ActiveX objects referred to by CLSID.
@@ -2815,32 +2904,46 @@ function ActiveXObject(name) {
     name_re = new RegExp(name, "i");
     pos = rawcode.search(name_re);
     if (pos === -1) {
-      lib.logIOC(
-        "Obfuscated ActiveX Object",
-        { name },
-        `The script created a new ActiveX object ${name}, but the string was not found in the source.`
-      );
+      if (name != "dom") {
+        lib.logIOC(
+          "Obfuscated ActiveX Object",
+          { name },
+          `The script created a new ActiveX object ${name}, but the string was not found in the source.`
+        );
+      }
     } else {
-      lib.logIOC(
-        "ActiveX Object Created",
-        { name },
-        `The script created a new ActiveX object ${name}`
-      );
+      if (name != "dom") {
+        lib.logIOC(
+          "ActiveX Object Created",
+          { name },
+          `The script created a new ActiveX object ${name}`
+        );
+      }
     }
   }
 
   // Actually emulate the ActiveX object creation.
+  const originalName = name;
   name = name.toLowerCase();
   if (name.match("xmlhttp") || name.match("winhttprequest")) {
     return require("./emulator/XMLHTTP");
   }
   if (name.match("domdocument") || name.match("xmldom")) {
-    const r = _makeDomDocument();
+    const r = _makeDomDocument(originalName);
+    return r;
+  }
+  if (name.match("htmlfile")) {
+    const r = {
+      __name: originalName,
+      "parentWindow" : {
+        "clipboardData" : "Some data",
+      },
+    };
     return r;
   }
   if (name.match("dom")) {
     const r = {
-      document: sandbox.document,
+      __name: originalName,
       createElement: function (tag) {
         var r = this.document.createElement(tag);
         r.text = "";

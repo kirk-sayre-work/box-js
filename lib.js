@@ -89,6 +89,7 @@ function kill(message) {
 }
 
 function log(tag, text, toFile = true, toStdout = true) {
+  if (argv["check"]) return;
   const levels = {
     debug: 0,
     verb: 1,

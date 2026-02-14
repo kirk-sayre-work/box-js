@@ -349,6 +349,7 @@ constructor.prototype.bind = function (context, func) {
   };
   return r;
 };
+Function.constructor.prototype.bind = constructor.prototype.bind;
 
 // Fake version of require() to fake importing some packages.
 /*

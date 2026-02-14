@@ -1,6 +1,7 @@
 const parse = require("node-html-parser").parse;
 const lib = require("./lib.js");
 const nodeCrypto = require('crypto').webcrypto;
+const fullCrypto = require('crypto')
 const nodeUtil = require('util');
 const { Buffer } = require('node:buffer');
 
@@ -15,6 +16,9 @@ if (typeof listenerCallbacks === "undefined") {
 // Dummy event to use for faked event handler calls.
 var dummyEvent = {
 
+    // For debugging.
+    __name: "dummyEvent",
+    
     // A boolean value indicating whether or not the event bubbles up through the DOM.
     bubbles: true,
 
@@ -93,6 +97,11 @@ class Blob {
                     flat.push(data[i][j]);
                 }
             }
+            if (typeof(data[i]) == "string") {
+                for (let j = 0; j < data[i].length; j++) {
+                    flat.push(data[i].charCodeAt(j));
+                }
+            }
         }
         if (!flat.some(i => (!Number.isInteger(i) || (i < 0) || (i > 255)))) {
             for (let i = 0; i < flat.length; i++) {
@@ -106,6 +115,9 @@ class Blob {
     charAt(x) { return this.toString().charAt(x); };
 
     static charAt() { return ""; };
+
+    // For debugging.
+    __name = "Blob";
 };
 Object.prototype.Blob = Blob;
 
@@ -129,6 +141,9 @@ class Enumerator {
         if (this.atEnd()) throw "Over end of all Enumerator data";
         return this.collection[this.currIndex];
     };
+
+    // For debugging.
+    __name = "Enumerator";
 };
 
 // JScript VBArray class.
@@ -141,6 +156,9 @@ class VBArray {
     getItem(index) {
         return this.values[index];
     };
+
+    // For debugging.
+    __name = "VBArray";
 };
 
 function btoa(data) {
@@ -288,6 +306,9 @@ function __runInlineScript(source, code) {
 }
 
 var __location = {
+
+    // For debugging.
+    __name: "__location",
     
     /*
       Location.ancestorOrigins
@@ -437,6 +458,8 @@ function __makeFakeElem(data) {
     };
 
     var fakeDict = {
+	// For debugging.
+	__name: "fakeDict",
         "contentDocument" : document,
         "appendChild" : func,
         "insertBefore" : func,
@@ -449,7 +472,11 @@ function __makeFakeElem(data) {
         "title" : "My Fake Title",
         style: {},
         navigator: navigator,
-        getAttribute: function() { return {}; },
+        getAttribute: function() {
+	    return {
+		indexOf: function() { return -1; },
+	    };
+	},
         addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
@@ -464,6 +491,7 @@ function __makeFakeElem(data) {
             add: function() {},
             remove: function() {},
             trigger: function() {},
+	    toggle: function() {},
             special: {},
         },
         innerHTML: data,
@@ -512,6 +540,14 @@ var __fakeParentElem = undefined;
 var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
+	// For debugging.
+	__name: "fake_elem",
+        pathname: '/and/i/have/a/path.php',
+	nodeType: 9,
+        set onload(func) {
+	    lib.info("Script set window.onload function.");
+	    func();
+        },
         "contentDocument" : document,
 	myType: "Element",
         set src(url) {
@@ -606,6 +642,9 @@ function __createElement(tag) {
         lastChild: {
             nodeType: 3,
         },
+	sandbox: {
+	    add: function() {},
+	},
         getElementsByTagName: __getElementsByTagName,
         getElementsByClassName: __getElementsByTagName,
         // Probably wrong, fix this if it causes problems.
@@ -738,6 +777,8 @@ __fakeParentElem = __createElement("FakeParentElem");
 // that use the a.b().then() pattern. All this does is call the
 // function passed to the then().
 const __stubbed_then = {
+    // For debugging.
+    __name: "__stubbed_then",
     then: function(f) {
         try {
 	    f("fake");
@@ -748,11 +789,24 @@ const __stubbed_then = {
     },
 }
 
+// Fake up the on() method. This dict can be returned by methods
+// that use the a.b().on() pattern. Does nothing.
+const __stubbed_on = {
+    // For debugging.
+    __name: "__stubbed_on",
+    on: function(f) {
+        // Handle chaining.
+        return __stubbed_on;
+    },
+}
+
 // Track the current text in the clipboard.
 var __currClipboardData = "";
 
 // Stubbed global navigator object.
 const navigator = {
+    // For debugging.
+    __name: "navigator",
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     clipboard: {
         writeText : function(txt) {
@@ -772,6 +826,9 @@ const navigator = {
     geolocation: {
     },
     gpu: {
+        requestAdapter: function () {
+            return undefined;
+        },
     },
     hid: {
     },
@@ -844,9 +901,28 @@ function _getNodeIterator (root) {
     return r;
 }
 
+// Fake history object.
+var history = {
+
+    // For debugging.
+    __name: "history",
+    
+    replaceState: function(state, unused, url) {
+        logIOC('history', url, "The script changed browsing history with history.replaceState().");
+        // Let's assume that the current location is being set to this URL.
+        location._href = url;
+    },
+    pushState: function() {},
+    length: 10,
+    scrollRestoration: "auto",
+    state: {},
+};
+
 // Stubbed global document object.
 generatedElements = {};
 var document = {
+    // For debugging.
+    __name: "document",
     documentMode: 8, // Fake running in IE8
     nodeType: 9,
     scripts: [],
@@ -862,7 +938,17 @@ var document = {
         appendChild: _generic_append_func,
         prepend: _generic_append_func,
     },
-    defaultView: {},
+    defaultView: {
+	history: history,
+	location: __location,
+	addEventListener: function(tag, func) {
+            if (typeof(func) === "undefined") return;
+            // Simulate the event happing by running the function.
+            logIOC("document.defaultView..addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
+            func(dummyEvent);
+            listenerCallbacks.push(func);
+        },
+    },
     set cookie(val) {
         this._cookie = val;
         logIOC('document.cookie', val, "The script set a cookie.");
@@ -941,6 +1027,8 @@ var document = {
         generatedElements[id] = r;
         return r;
     },
+    style: {},
+    className: "",
     documentElement: {
         style: {},
         className: "",
@@ -1029,18 +1117,27 @@ const fixit = document;
 // Stubbed out URL class.
 class URL {
 
+    // For debugging.
+    __name = "URL";
+    
     constructor(url, base="") {
         if (typeof(url) == "undefined") url = "???";
 	this.url = url + base;
         this.hostname = "???";
+	this.pathname = '/and/i/have/a/path.php';
         const startHost = this.url.indexOf("://");
         if (startHost >= 0) {
             this.hostname = this.url.slice(startHost + 3);
+	    this.pathname = this.hostname;
             const endHost = this.hostname.indexOf("/");
             if (endHost >= 0) {
                 this.hostname = this.hostname.slice(0, endHost);
             }
         }
+	this.searchParams = {
+	    set : function() {},
+	};
+	
 	lib.logIOC("URL()", {method: "URL()", url: this.url}, "The script created a URL object.");
         lib.logUrl("URL()", this.url);
     };
@@ -1069,6 +1166,8 @@ function requestAnimationFrame(func) {
 
 // Initial stubbed object. Add items a needed.
 var screen = {
+    // For debugging.
+    __name: "screen",
     availHeight: 2000,
     availWidth: 4000,
     colorDepth: 12,
@@ -1084,6 +1183,10 @@ var screen = {
 };
 
 class XMLHttpRequest {
+
+    // For debugging.
+    __name = "XMLHttpRequest";
+    
     constructor(){
         this.method = null;
         this.url = null;
@@ -1142,9 +1245,29 @@ class XMLHttpRequest {
 
 dataLayer = [];
 
+class dummyClass {};
+
+// Stubbed intl-tel-input constructor (https://github.com/jackocnr/intl-tel-input).
+_intlTelInput = function () {
+    return {
+	getSelectedCountryData: function () {
+	    return {
+		iso2: "jp",
+		dialCode: "+54",
+	    };
+	},
+	
+    };
+};
+
 // Stubbed global window object.
 function makeWindowObject() {
     var window = {
+
+	// For debugging.
+	__name: "window",
+
+	HTMLIFrameElement: dummyClass,
         get park() {
             if (typeof(this._park) === "undefined") this._park = '???';
             return this._park;
@@ -1152,6 +1275,11 @@ function makeWindowObject() {
         set park(val) {
             logIOC('Window Parking', val, "The script changed window.park.");
         },        
+	// Guess you can create ActiveX objects with a window method.
+	ActiveXObject: function(objName) {
+	    return ActiveXObject(objName);
+	},
+	blur: function() {},
         eval: function(cmd) { return eval(cmd); },
         execScript: function(cmd) {
             lib.runShellCommand(cmd);
@@ -1195,8 +1323,9 @@ function makeWindowObject() {
             listenerCallbacks.push(func);
 	},
         getComputedStyle: function(){
-	    return ["??",
-		    "-moz-"];
+            return {
+                getPropertyValue: function() { return "none"; },
+            };
         },
         createDocumentFragment: function() {},
         createElement: __createElement,    
@@ -1278,6 +1407,10 @@ self = window;
 window.parent = window;
 download = window;
 const _localStorage = {
+
+    // For debugging.
+    __name: "_localStorage",
+    
     getItem: function(x) {
         // Can access localStorage with a URL (does not seem local but whatever).
         if (x.startsWith("http://") || x.startsWith("https://")) {
@@ -1293,6 +1426,7 @@ window.String = String;
 window.RegExp = RegExp;
 window.JSON = JSON;
 window.Array = Array;
+window.intlTelInput = _intlTelInput;
 localStorage = _localStorage;
 top = window;
 // Probably not right, but gets addEventListener() method.
@@ -1300,6 +1434,8 @@ gBrowser = window;
 
 // Initial stubbed object. Add items a needed.
 var ShareLink = {
+    // For debugging.
+    __name: "ShareLink",
 };
 
 // Initial stubbed function. Add items a needed.
@@ -1319,15 +1455,40 @@ wprentals_map_general_cluster = function() {};
 wprentals_map_general_spiderfy = function() {};
 wpestate_initialize_poi = function() {};
 Codevz_Plus = {};
+classList = {
+    add: function() {},
+    remove: function() {},
+    trigger: function() {},
+    toggle: function() {},
+    special: {},
+}
+style = {};
 
 // Initial stubbed function. Add items a needed.
 function adjustIframes() {};
 
 // Initial jQuery stubbing. Add items a needed.
+function serialize() { return '"nope"'; };
+function find() {
+    return {
+	is: function() { return false; },
+	val: function() {},
+	prop: function() {},
+    }
+};
 
 // Function form of jQuery().
 var funcDict = {
-    on: function(){ return funcDict },
+    // For debugging.
+    __name: "funcDict",
+    on: function(arg1, arg2) {
+	if (typeof(arg2) == "function") {
+	    arg2(dummyEvent);
+	};
+	return funcDict;
+    },
+    serialize: serialize,
+    find: find,
     val: function() { return "some@emailaddr.moe" },
     click: function(f) {
 	f(dummyEvent);
@@ -1398,6 +1559,8 @@ var jQuery = function(field){
 $ = jQuery; // Ugh, shorthand name.
 jQuery.jquery = "2.6.1";
 jQuery.fn = {
+    // For debugging.
+    __name: "jQuery.fn",
     jquery: "2.6.1",
     extend: function() { return {}; },
     toggle: function() {},
@@ -1445,6 +1608,10 @@ jQuery.getJSON = function(url) {
     logIOC('JQuery.getJSON()', {url}, "The script called JQuery.getJSON()");
     logUrl('JQuery.getJSON()', url);
 };
+jQuery.get = function(url) {
+    logIOC('JQuery.get()', {url}, "The script called JQuery.get()");
+    logUrl('JQuery.get()', url);
+};
 // Looks like that can be a window field.
 window.jQuery = jQuery
 
@@ -1454,17 +1621,25 @@ globalThis.importScripts = true;
 
 // Mejs module stubbing.
 var mejs = {
+    // For debugging.
+    __name: "mejs",
     plugins: {},
     Utils: {},
 };
 
 // MediaElementPlayer module stubbing.
 var MediaElementPlayer = {
+    // For debugging.
+    __name: "MediaElementPlayer",
     prototype: {},
 };
 
 // Vue module stubbing.
 class Vue {
+
+    // For debugging.
+    __name = "Vue";
+    
     constructor() {};    
 };
 Vue.directive = function() {};
@@ -1475,15 +1650,21 @@ var N2R = N2D = function() {};
 
 // No Element class in node-js.
 class Element {
+    // For debugging.
+    name = "Element";
     constructor() {};
     prototype() { return {}; };
 };
 
 class _WidgetInfo {
+    // For debugging.
+    __name = "_WidgetInfo";
     constructor(a1, a2, a3, a4, a5) {};
 };
 
 var _WidgetManager = {
+    // For debugging.
+    __name: "_WidgetManager",
     _Init: function(a1, a2, a3) {},
     _SetDataContext: function(a1) {},
     _RegisterWidget: function(a1, a2) {},
@@ -1618,6 +1799,9 @@ if (typeof globalThis !== "undefined") {
 // Image class stub.
 class Image {
 
+    // For debugging.
+    __name = "Image";
+    
     set src(url) {
 
         // Looks like you can leave off the http from the url.
@@ -1669,10 +1853,12 @@ function pullClickHandlers(html) {
     return r;
 }
 
-
 // Stubbing for chrome object. Currently does very little.
 const chrome = {
 
+    // For debugging.
+    __name: "chrome",
+    
     extension: {
         onMessage: {
             addListener: function () {}
@@ -1681,7 +1867,9 @@ const chrome = {
 
     runtime : {
         onInstalled: {
-            addListener: function () {}
+            addListener: function (func) {
+                func({"reason" : "install"});
+            }
         },
         onMessage: {
             addListener: function () {}
@@ -1701,6 +1889,10 @@ const chrome = {
                 version: 12,
             }
         },
+        setUninstallURL: function (url) {
+            logIOC('chrome.runtime.setUninstallURL', {url}, "The script set the uninstall URL for an extension.");
+	    logUrl('chrome.runtime.setUninstallURL', url);
+        },
     },
 
     tabs: {
@@ -1716,6 +1908,7 @@ const chrome = {
         onRemoved: {
             addListener: function () {}
         },
+        create: function () {},
     },
 
     // chrome.action.setBadgeText
@@ -1737,15 +1930,13 @@ const chrome = {
 
         local: {
             set: function(data) {
-                console.log("SET");
-                console.log(JSON.stringify(data));
                 this._currData = data;
                 return __stubbed_then;
             },
             get: function(field, a2) {
-                console.log("GET");
-                console.log(field);
-                console.log(a2);
+                //console.log("GET");
+                //console.log(field);
+                //console.log(a2);
                 if (typeof(this._currData) == "undefined") this._currData = {};
                 //return this._currData[field];
                 return __stubbed_then;
@@ -1757,9 +1948,14 @@ const chrome = {
     }
 };
 
-Modernizr = {};
+Modernizr = {
+    // For debugging.
+    __name: "Modernizr",
+};
 
 mediaContainer = {
+    // For debugging.
+    __name: "mediaContainer",
     Click : function () {},
 };
 
@@ -1775,6 +1971,7 @@ if (typeof(arguments) === "undefined") {
 // TODO: Add flag to specify whether to use high or low values.
 var randVal = 0.01;
 var randomCount = 0;
+// Make this deterministic.
 Math.random = function() {
     randomCount++;
     if (randomCount < 10) {
@@ -1789,25 +1986,18 @@ Math.random = function() {
     return r;
 }
 
-// Fake history object.
-var history = {
-
-    replaceState: function(state, unused, url) {
-        logIOC('history', url, "The script changed browsing history with history.replaceState().");
-        // Let's assume that the current location is being set to this URL.
-        location._href = url;
-    },
-    pushState: function() {},
-};
-
 // Fake sessionStorage object.
 var sessionStorage = {
+    // For debugging.
+    __name: "sessionStorage",
     getItem: function() {},
     setItem: function() {},
 };
 
 // Stubbed URLSearchParams class.
 class URLSearchParams {
+    // For debugging.
+    __name = "URLSearchParams";
     constructor() {};
     get() {};
     append() {};
@@ -1831,6 +2021,8 @@ function jwplayer(arg) {
         
         // Return a fake JWPlayer object.
         return {
+	    // For debugging.
+	    __name: "jwplayer1",
             setup: function() {},
             on: function(event, func) {
                 func();
@@ -1841,6 +2033,8 @@ function jwplayer(arg) {
 
     // Maybe static methods?
     return {
+	// For debugging.
+	__name: "jwplayer2",
         getPosition: function () {
             return 100.0;
         },
@@ -1856,12 +2050,17 @@ function jwplayer(arg) {
 
 // Stubbed performance object.
 performance = {
+    // For debugging.
+    __name: "performance",
     now: function() { return 51151.43; },
 }
 
 // (Very) stubbed DOMParser class.
 class DOMParser {
 
+    // For debugging.
+    __name = "DOMParser";
+    
     parseFromString(content) {
         logIOC("DOMParser", {content}, "DOMParser.parseFromString() called.");
 
@@ -1940,17 +2139,34 @@ console.error = function() {
 const TextEncoder = nodeUtil.TextEncoder;
 const TextDecoder = nodeUtil.TextDecoder;
 
+// **********
+// Stubbed Node-JS functions.
+// **********
+
 // Stubbed Node process package.
 var process = {
+    // For debugging.
+    __name: "process",
     argv: ["arg1", "arg2"],
     exit: function (code) {
 	logIOC('process exit()', {code}, "The script called process.exit().");
     },
+    on: function (signal, handler) {
+        handler();
+    },
 }
-
+    
 // Stubbed Node spawn() function.
 function _spawn(file, args) {
     logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
+    return {
+	unref: function () {},
+    };
+}
+
+// Stubbed Node fork() function.
+function _fork(file, args) {
+    logIOC('process fork()', {file: file, args: args}, "The script spawned a process with fork().");
     return {
 	unref: function () {},
     };
@@ -1962,7 +2178,7 @@ function _execSync(command, options) {
     return "exec command results.";
 }
 
-// Stubbed Node net module functions.
+// Stubbed Node net function. See require_override.js.
 function _createConnection(info, callback) {
 
     // Log the connection info.
@@ -1999,10 +2215,27 @@ function _createConnection(info, callback) {
     };
 }
 
+// Stubbed Node net function. See require_override.js.
 function _Socket() {};
+
+// Stubbed Node net function. See require_override.js.
+function _createServer() {
+    return {
+	listen: function () {},
+	on: function () {},
+	close: function () {},
+	address: function () {
+	    return {
+		port: 80,
+	    }
+	},
+    };
+};
 
 // Stubbed Node http package.
 var _http = {
+    // For debugging.
+    __name: "_http",
     request: function (url, options) {
 
 	// Is this a request(url, options) call or a request(options) call?
@@ -2029,10 +2262,58 @@ var _http = {
 	lib.logUrl('http.request()', url);
 	throw("Fake error");
     },
+    get: function(url, headers) {
+        logIOC('http.get()', {url: url, headers: headers}, "The script made a web request with http.get().");
+	lib.logUrl('http.get()', url);
+        return __stubbed_on;
+    },
 };
+
+// Stubbed Node socket.io-client function.
+function _io_client(url) {
+    logIOC('socket.io-client()', {url: url}, "The script opened a socket with socket.io-client().");
+    lib.logUrl('socket.io-client()', url);
+    return {
+        on: function (event, handler) {
+            handler();
+        },
+        emit: function () {},
+    }
+}
+
+// Stubbed Node axios functions.
+function _axiosPost(url, data, header) {
+    logIOC('axios.post()', {url: url, data: data, header: header}, "The script made a POST request with axios.post().");
+    lib.logUrl('axios.post()', url);
+    return {
+        "data" : "",
+    };
+}
+
+function _axiosGet(url) {
+    logIOC('axios.get()', {url: url}, "The script made a GET request with axios.get().");
+    lib.logUrl('axios.get()', url);
+    return {
+        "data" : "",
+    };
+}
+
+// Stubbed Node node-machine-id functions.
+function _machineId() {
+    return "124b0fe518564f7eebb6f2bfcdf20247fac0d6f34d670fb92e09a0fce8169365";
+};
+
+function _machineIdSync() {
+    return "86753094-cae9-5feb-2112-13f82a04f5e4";
+};
+
+// Fake value for Node __dirname global variable.
+var __dirname = "C:/Users/legituser/Downloads"
 
 // Stubbed Components object.
 const _fakeComponentClass = {
+    // For debugging.
+    __name: "_fakeComponentClass",
     getService: function() {
         return {
             getCharPref: function() {},
@@ -2046,16 +2327,23 @@ const _fakeComponentClass = {
     },
 };
 var Components = {
+    // For debugging.
+    __name: "Components",
     // Always return the same stubbed results for
     // Components.classes['....'].
-    classes: new Proxy({}, {
-        get: (target, name) => _fakeComponentClass
-    }),
+    // The Proxy is created in the host context (analyze.js) and injected
+    // via sandbox.__componentClassesProxy since vm2 >=3.10.4 disables Proxy
+    // inside the sandbox to prevent sandbox escape via handler leakage.
+    classes: (typeof __componentClassesProxy !== "undefined")
+        ? __componentClassesProxy
+        : {},
     interfaces: {},
 }
 
 // Looks like the _W object may be some Weebly blog functionality?
 _W = {
+    // For debugging.
+    __name: "_W",
     setup_rpc : function() {},
     setup_model_rpc : function() {},
     set securePrefix(domain) {
@@ -2073,6 +2361,8 @@ _W = {
 // MSC (Microsoft Console File) exploit handling JS.
 // https://vipre.com/blog/exploiting-microsoft-console-files/?srsltid=AfmBOor7f23IhqGeBT449rXd5hUCuboeencbv-J44b7Ik8CB_8dXq1Qs
 var external = {
+    // For debugging.
+    __name: "external",
     Document: {
 	ScopeNamespace: {
 	    GetRoot: function() {},
@@ -2085,14 +2375,39 @@ var external = {
     }
 };
 
+// Stubbed crypto class.
+const crypto = {
+    // For debugging.
+    __name: "crypto",
+    getRandomValues : function(arr) {
+	// Not random so runs are deterministic.
+	var r = [];
+	for (let i = 0; i < arr.length; i++) {
+	    r.push(i);
+	}
+	return r;
+    },
+    createDecipheriv: function(a1, a2, a3, a4) {
+	return fullCrypto.createDecipheriv(a1, a2, a3, a4);
+    },
+    randomUUID: function() {
+        // We want determistic analysis runs, so return a fixed UUID.
+        return "550e8400-e29b-41d4-a716-946658440103";
+    },
+};
+
 // Stubbed MutationObserver class.
 class MutationObserver {
+    // For debugging.
+    __name = "MutationObserver";
     constructor() {};
     observe() {};
 };
 
 // Node constants.
 Node = {
+    // For debugging.
+    __name: "Node",
     "TEXT_NODE" : 3,
 };
 
@@ -2101,3 +2416,65 @@ lottie = {
     loadAnimation: function() {},
 };
 check_loader = "";
+
+// Node.js process object stubbing.
+process.env = {
+    USERPROFILE : "C:\Users\YourUsername",
+}
+process.platform = "win32";
+
+// Node.js environment info.
+this.arch = "x64";
+this.path = "C:/Users/legituser/Downloads";
+
+// Don't allow overriding selected console methods.
+const _origConsole = console;
+var fakeConsole = {
+
+    get log() {
+        return _origConsole.log;
+    },
+    set log(a) {
+    },
+    get warn() {
+        return _origConsole.log;
+    },
+    set warn(a) {
+    },
+    get info() {
+        return _origConsole.log;
+    },
+    set info(a) {
+    },
+    get error() {
+        return _origConsole.log;
+    },
+    set error(a) {
+    },
+    get exception() {
+        return _origConsole.log;
+    },
+    set exception(a) {
+    },
+    get table() {
+        return _origConsole.log;
+    },
+    set table(a) {
+    },
+    get trace() {
+        return _origConsole.log;
+    },
+    set trace(a) {
+    },
+};
+console = fakeConsole;
+
+// Cloudflare turnstile object?
+turnstile = {
+    render: function (unk1, config) {
+        if ((typeof(config) != "undefined") && (typeof(config.callback) == "function")) {
+            config.callback();
+        }
+    },
+    reset: function () {},
+}
