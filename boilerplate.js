@@ -925,6 +925,24 @@ var document = {
         appendChild: _generic_append_func,
         prepend: _generic_append_func,
     },
+    _onclick: undefined,
+    set onclick(func) {
+        this._onclick = func;
+        // Call the click handler.
+        func();
+    },
+    get onclick() {
+        return this._onclick;
+    },
+    _onmousemove: undefined,
+    set onmousemove(func) {
+        this._onmousemove = func;
+        // Call the click handler.
+        func();
+    },
+    get onmousemove() {
+        return this._onmousemove;
+    },    
     defaultView: {
 	history: history,
 	location: __location,
