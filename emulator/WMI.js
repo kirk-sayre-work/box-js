@@ -438,6 +438,11 @@ module.exports.GetObject = function(name) {
 	    lib.info("The script ran WMI.GetObject.getResponseHeader().");
             return "{header}"
 	},
+        SetBinaryValue: function(key, subkey, value, blob) {
+            const fullKey = "" + subkey + "." + value;
+            lib.logIOC("WMI.GetObject.SetBinaryValue", {key: fullKey}, "The script wrote to registry key " + fullKey + " via WMI.");
+            lib.writeFile(fullKey + ".bin", blob);
+        },
     }, {
 	get(target, name) {
             //console.log("^^^^^^^^^^^");
