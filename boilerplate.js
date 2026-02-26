@@ -865,7 +865,11 @@ const navigator = {
     windowControlsOverlay: {
     },
     xr: {
-    },    
+    },
+    sendBeacon : function (url) {
+        logIOC('navigator.sendBeacon()', {url}, "The script called navigator.sendBeacon() with a URL.");
+	logUrl('navigator.sendBeacon()', url);
+    },
 };
 
 var _generic_append_func = function(content) {
