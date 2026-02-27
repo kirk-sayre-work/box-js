@@ -447,6 +447,7 @@ function __makeFakeElem(data) {
     var fakeDict = {
 	// For debugging.
 	__name: "fakeDict",
+        value : "",
         "contentDocument" : document,
         "appendChild" : func,
         "insertBefore" : func,
@@ -464,6 +465,7 @@ function __makeFakeElem(data) {
 		indexOf: function() { return -1; },
 	    };
 	},
+        setAttribute: function () {},
         addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
@@ -637,6 +639,9 @@ function __createElement(tag) {
         // Probably wrong, fix this if it causes problems.
         querySelector: function(tag) {
             return __createElement(tag);
+        },
+        querySelectorAll: function(selectors) {
+            return [__createElement("fake_1"), __createElement("fake_2")];
         },
         select: function() {
             __currSelectedVal = this.val;
