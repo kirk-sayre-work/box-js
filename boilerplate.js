@@ -2394,3 +2394,27 @@ turnstile = {
     },
     reset: function () {},
 }
+
+// Google debug (I think?) object.
+google = {
+    script : {
+	init : function(content) {
+	    logIOC('google.script.init()', {content}, 'The script loaded HTML via google.script.init()')
+	    try {
+		loadedInfo = JSON.parse(content);
+		if (typeof(loadedInfo.userHtml) !== "undefined") {
+		    content = html = loadedInfo.userHtml;
+		    logIOC("DOM Write", {content}, "The script added a HTML node to the DOM");
+		    const urls = pullActionUrls(html);
+		    if (typeof(urls) !== "undefined") {
+			for (const url of urls) {
+			    logUrl('Action Attribute', url);
+			};
+		    }
+		}
+	    }
+	    catch (e) { };
+	},
+    }
+};
+goog = google;
