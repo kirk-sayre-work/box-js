@@ -761,6 +761,7 @@ function __createElement(tag) {
     fake_elem["contentWindow"] = {
         document: document,
     };
+    fake_elem.value = "NOT SET";
     return fake_elem;
 };
 __fakeParentElem = __createElement("FakeParentElem");
@@ -1291,6 +1292,11 @@ function makeWindowObject() {
 	    return ActiveXObject(objName);
 	},
 	blur: function() {},
+        setInterval: function() {},
+        clearInterval: function() {},
+        encodeURIComponent: function(s) {
+            return encodeURIComponent(s);
+        },
         eval: function(cmd) { return eval(cmd); },
         execScript: function(cmd) {
             lib.runShellCommand(cmd);
