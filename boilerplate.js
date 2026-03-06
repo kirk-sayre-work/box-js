@@ -1548,7 +1548,16 @@ var funcDict = {
     isFunction: function() {},
     data: function() { return "12"; },
     outerHeight: function() {},
-    css: function() {},
+    css: function() {
+        return {
+            html: function (text) {
+                logIOC('JQuery html()', {text}, "The script set HTML with JQuery html() method.");
+                return {
+                    fadeIn: function () {},
+                };
+            },
+        }
+    },
     // Probably not jQuery
     avia_sc_messagebox: function() {},
     trigger: function() {},
@@ -1561,7 +1570,16 @@ var funcDict = {
     hide: function() {},
     keypress: function() {},
     animate: function() {},
-    show: function() {},
+    show: function() {
+        return {
+            html: function (text) {
+                logIOC('JQuery html()', {text}, "The script set HTML with JQuery html() method.");
+                return {
+                    fadeIn: function () {},
+                };
+            },
+        };
+    },
     html: function() {},
     focus: function() {},
     text: function() {},
