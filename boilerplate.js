@@ -818,6 +818,9 @@ const navigator = {
     },
     geolocation: {
     },
+    javaEnabled: function () {
+        return false;
+    },
     gpu: {
         requestAdapter: function () {
             return undefined;
@@ -864,6 +867,9 @@ const navigator = {
     userActivation: {
     },
     userAgentData: {
+        getHighEntropyValues: function () {
+            return __stubbed_then;
+        },
     },
     virtualKeyboard: {
     },
@@ -2424,3 +2430,11 @@ google = {
     }
 };
 goog = google;
+
+// Stubbed HTMLElement class.
+class HTMLElement {
+};
+
+aclib = {
+    runPop: function () {},
+};
