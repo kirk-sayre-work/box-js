@@ -11,6 +11,51 @@ const { Buffer } = require('node:buffer');
 // multiple times.
 const listenerCallbacks = [];
 
+// Wrap decodeURIComponent() so that we can (possibly) track some
+// string decodes.
+const decodedURLs = new Set();
+const decodedBase64 = new Set();
+decodeURIComponent = (function(_super) {
+    return function() {
+
+        // Has a URL?
+        const r = _super.apply(this, arguments);
+        const urls = r.match(/https?:\/\/[^\s^'^"]+/g);
+        if (urls){
+            var newUrl = false;
+            for (const url of urls) {
+                if (!decodedURLs.has(url)) {
+                    logUrl('decodeURIComponent()', url);
+                    newUrl = true;
+                }
+                decodedURLs.add(url);
+                if (newUrl) {
+                    logIOC("decodeURIComponent()", r, "The script decoded a URL with decodeURIComponent().")
+                }
+            }
+        }
+
+        // Has base64?
+        const allB64 = r.match(/[A-Za-z0-9\+\/]{100,}[=]{0,2}/g);
+        if (allB64){
+            var newBase64 = false;
+            for (const b64 of allB64) {
+                if (!decodedBase64.has(b64)) {
+                    newBase64 = true;
+                }
+                decodedURLs.add(b64);
+                if (newBase64) {
+                    logIOC("decodeURIComponent()", r, "The script decoded a base64 blob with decodeURIComponent().")
+                }
+            }
+        }
+        
+        // Done.
+        return r;
+    };         
+
+})(decodeURIComponent);
+
 // Dummy event to use for faked event handler calls.
 const dummyEvent = {
 
