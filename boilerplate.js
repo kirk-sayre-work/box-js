@@ -1902,6 +1902,7 @@ const chrome = {
             logIOC('chrome.runtime.setUninstallURL', {url}, "The script set the uninstall URL for an extension.");
 	    logUrl('chrome.runtime.setUninstallURL', url);
         },
+	id : "abcdefghijklmnopabcdefghijklmnop",
     },
 
     tabs: {
