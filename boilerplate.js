@@ -2387,6 +2387,7 @@ const crypto = {
         // We want determistic analysis runs, so return a fixed UUID.
         return "550e8400-e29b-41d4-a716-946658440103";
     },
+    subtle: fullCrypto.subtle,
 };
 
 // Stubbed MutationObserver class.
