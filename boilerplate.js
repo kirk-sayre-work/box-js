@@ -2502,3 +2502,14 @@ class HTMLElement {
 aclib = {
     runPop: function () {},
 };
+
+// Stubbed AbortController class.
+class AbortController {
+
+    // For debugging.
+    __name = "AbortController";
+
+    signal = "???";
+    abort() {};
+    
+};
