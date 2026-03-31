@@ -981,8 +981,14 @@ var wscript_proxy = new Proxy({
                 return {
                     typeof: "unknown",
                 };
-            case "named":
-                return commandLineArgs;
+            case "named": {
+		var r = commandLineArgs;
+		r.Exists = function (arg) {
+		    // For now just say all args exist.
+		    return true;
+		};
+                return r;
+	    }
             default:
                 return new Proxy(
                     target[name], {
