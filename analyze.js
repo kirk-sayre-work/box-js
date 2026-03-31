@@ -1353,6 +1353,8 @@ function ActiveXObject(name) {
         return require("./emulator/FileSystemObject");
     case "scripting.dictionary":
         return require("./emulator/Dictionary");
+    case "vbscript.regexp":
+        return require("./emulator/RegExp");
     case "shell.application":
         return require("./emulator/ShellApplication");
     case "internetexplorer.application":
