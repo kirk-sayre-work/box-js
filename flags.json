@@ -238,6 +238,12 @@
             "description": "Lie about the current date/time and return an old date."
         },
 	{
+            "name": "dump-vars",
+            "alias": "d",
+            "type": "Boolean",
+            "description": "Look at all defined variables in script and dump interesting variable values to files for later analysis."
+	},
+	{
             "name": "check",
             "alias": "c",
             "type": "Boolean",
