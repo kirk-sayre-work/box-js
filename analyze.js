@@ -821,10 +821,26 @@ if (argv["check"]) {
 	console.log("JS syntax is valid.");
 	process.exit(0);
     } catch (e) {
-	console.log("JS syntax is invalid.");
-	console.log(e);
-	process.exit(1);
-    }        
+
+	// Try rewriting the code to see if it is then valid.
+	const rewrittenCode = rewrite(code);
+	try {
+            let tree = acorn.parse(rewrittenCode, {
+		ecmaVersion: "latest",
+		allowReturnOutsideFunction: true, // used when rewriting function bodies
+		plugins: {
+                    // enables acorn plugin needed by prototype rewrite
+                    JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
+		},
+            });
+	    console.log("JS syntax is valid.");
+	    process.exit(0);
+	} catch (e) {	    
+	    console.log("JS syntax is invalid.");
+	    console.log(e);
+	    process.exit(1);
+	}
+    }
 }
 
 // Extract the actual code to analyze from conditional JScript
