@@ -334,6 +334,7 @@ function extractJSFromHTA(s) {
     return r;
 }
 
+const fakeUrl = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
 var __location = {
 
     // For debugging.
@@ -355,7 +356,7 @@ var __location = {
        document.
     */
     get href() {
-        if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
+        if (typeof(this._href) === "undefined") this._href = fakeUrl;
         return this._href;
     },
     set href(url) {
@@ -504,6 +505,7 @@ function __makeFakeElem(data) {
         "getElementsByTagName" : __getElementsByTagName,
         "title" : "My Fake Title",
         style: {},
+	src: fakeUrl,
         navigator: navigator,
         getAttribute: function() {
 	    return {
@@ -617,7 +619,7 @@ function __createElement(tag) {
             return this.val;
         },
         get href() {
-            if (typeof(this._href) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
+            if (typeof(this._href) === "undefined") this._href = fakeUrl;
             return this._href;
         },
         set href(url) {
@@ -1440,7 +1442,7 @@ function makeWindowObject() {
 	    func();
         },
         get MAIL_URL() {
-            if (typeof(this._MAIL_URL) === "undefined") this._href = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
+            if (typeof(this._MAIL_URL) === "undefined") this._href = fakeUrl;
             return this._MAIL_URL;
         },
         set MAIL_URL(url) {
@@ -1915,7 +1917,7 @@ const chrome = {
             addListener: function (callback) {
                 // (tabId, changeInfo, tab)
                 info = {
-                    url: "http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe",
+                    url: fakeUrl,
                 };
                 callback(1, info, "tab1");
             },
