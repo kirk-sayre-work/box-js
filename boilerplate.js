@@ -576,6 +576,9 @@ function __createElement(tag) {
     var fake_elem = {
 	// For debugging.
 	__name: "fake_elem",
+	dataset: (new Proxy({}, {
+	    get: (target, name) => name in target ? target[name] : "???"
+	})),
         pathname: '/and/i/have/a/path.php',
 	nodeType: 9,
         set onload(func) {
@@ -1489,12 +1492,14 @@ const _localStorage = {
     setItem: function(x,y) {},
 };
 window.localStorage = _localStorage;
+window.encryptedLocalStorage = _localStorage;
 window.String = String;
 window.RegExp = RegExp;
 window.JSON = JSON;
 window.Array = Array;
 window.intlTelInput = _intlTelInput;
 localStorage = _localStorage;
+encryptedLocalStorage = _localStorage;
 top = window;
 // Probably not right, but gets addEventListener() method.
 gBrowser = window;
