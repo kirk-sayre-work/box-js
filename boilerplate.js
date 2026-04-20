@@ -2521,3 +2521,8 @@ class AbortController {
     abort() {};
     
 };
+
+// Stubbed AbortSignal.
+var AbortSignal = {
+    timeout : function () { },	
+};
