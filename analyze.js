@@ -455,7 +455,13 @@ function extractCode(code) {
 
 function rewrite(code, useException=false) {
 
+    // CL option given for no rewriting?
     if (argv["no-rewrite"]) return code;
+    // Don't rewrite huge samples. Cap at 5MB.
+    if (code.length > 5e+6) {
+	lib.info("Sample too large. Not rewriting.");
+	return code;
+    }
     lib.verbose("Rewriting code...", false);
     
     //console.log("!!!! CODE: 0 !!!!");
