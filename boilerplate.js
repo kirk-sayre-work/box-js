@@ -2605,6 +2605,8 @@ MDCore = {};
 // Stubbed fs.writeFileSync().
 function _writeFileSync(path, buffer) {
     lib.writeFile(path, buffer);
+    const uuid = lib.getUUID();
+    lib.logResource(uuid, path, buffer);
     return true;
 }
 

@@ -142,6 +142,8 @@ function VirtualSWBEMServices() {
             }
         };
     };
+
+    this.security_ = function(arg) {};
 }
 
 function VirtualWBEMLocator() {
