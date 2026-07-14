@@ -891,6 +891,7 @@ const navigator = {
     },
     locks: {
     },
+    plugins: ["plugin1", "plugin2", "plugin3"],
     maxTouchPoints: {
     },
     mediaCapabilities: {
