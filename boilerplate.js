@@ -1513,6 +1513,7 @@ const _localStorage = {
         return null
     },
     setItem: function(x,y) {},
+    removeItem: function() {},
 };
 window.localStorage = _localStorage;
 window.encryptedLocalStorage = _localStorage;
