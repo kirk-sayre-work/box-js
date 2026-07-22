@@ -552,6 +552,9 @@ function __makeFakeElem(data) {
             return __createElement("__prepend__");
         },	
         cloneNode: func,
+        getSelection: function () {},
+        postMessage: function () {},
+        contentWindow: document,
     };
     return fakeDict;
 }
@@ -590,6 +593,9 @@ function __createElement(tag) {
 	    func();
         },
         "contentDocument" : document,
+        contentWindow: {
+            postMessage: function () {},
+        },
 	myType: "Element",
         set src(url) {
 
@@ -809,9 +815,6 @@ function __createElement(tag) {
                 right: 200,
             };
         },
-    };
-    fake_elem["contentWindow"] = {
-        document: document,
     };
     fake_elem.value = "NOT SET";
     return fake_elem;
@@ -1198,6 +1201,8 @@ var document = {
     on: function(event, func) {
 	func(dummyEvent);
     },
+    getSelection: function () {},
+    postMessage: function () {},
 };
 document.documentElement = document;
 const fixit = document;
