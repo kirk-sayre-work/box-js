@@ -137,7 +137,7 @@
             "type": "Boolean",
             "description": "Return `false` for Scripting.FileSystemObject.FileExists(x)"
         },
-	{
+	    {
             "name": "limit-file-checks",
             "type": "Boolean",
             "description": "Switch default value for folder/file exists checks if many checks are performed (try to break infinite file check loops)."
@@ -227,23 +227,28 @@
             "type": "Boolean",
             "description": "Ignore calls to WSCript.Quit() and continue execution."
         },
-	{
+        {
+            "name": "ignore-returns",
+            "type": "Boolean",
+            "description": "Ignore return statements with no values (just used for control flow) and continue execution."
+        },
+	    {
             "name": "ignore-rewrite-errors",
             "type": "Boolean",
             "description": "Analyze original sample if any sample rewrites fail."
         },
-	{
+	    {
             "name": "use-old-date",
             "type": "Boolean",
             "description": "Lie about the current date/time and return an old date."
         },
-	{
+	    {
             "name": "dump-vars",
             "alias": "d",
             "type": "Boolean",
             "description": "Look at all defined variables in script and dump interesting variable values to files for later analysis."
-	},
-	{
+	    },
+	    {
             "name": "check",
             "alias": "c",
             "type": "Boolean",

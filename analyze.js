@@ -453,10 +453,20 @@ function extractCode(code) {
     return r;
 }
 
+function rewrite_returns(code) {
+    const r = code.toString().replace(/return *;/g, '1==1;');
+    return r;
+}
+
 function rewrite(code, useException=false) {
 
     // CL option given for no rewriting?
     if (argv["no-rewrite"]) return code;
+
+    // Rewrite return statements that look like they are just used to
+    // modify the control flow?
+    if (argv["ignore-returns"]) code = rewrite_returns(code);
+    
     // Don't rewrite huge samples. Cap at 5MB.
     if (code.length > 5e+6) {
 	lib.info("Sample too large. Not rewriting.");
