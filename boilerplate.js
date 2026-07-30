@@ -580,23 +580,23 @@ var __fakeParentElem = undefined;
 var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
-	// For debugging.
-	__name: "fake_elem",
-	pause: function () {},
-	play: function () {},
-	dataset: lib.makeDefaultDict("???"),
+	    // For debugging.
+	    __name: "fake_elem",
+	    pause: function () {},
+	    play: function () {},
+	    dataset: lib.makeDefaultDict("???"),
         pathname: '/and/i/have/a/path.php',
-	checked: true,
-	nodeType: 9,
+	    checked: true,
+	    nodeType: 9,
         set onload(func) {
-	    lib.info("Script set window.onload function.");
-	    func();
+	        lib.info("Script set window.onload function.");
+	        func();
         },
         "contentDocument" : document,
         contentWindow: {
             postMessage: function () {},
         },
-	myType: "Element",
+	    myType: "Element",
         set src(url) {
 
             // Looks like you can leave off the http from the url.
@@ -631,27 +631,27 @@ function __createElement(tag) {
             return this._href;
         },
         set href(url) {
-	    if (url) {
-		url = url.replace(/\r?\n/g, "");
-		this._href = url;
-		logIOC('HREF Location', {url}, "The script changed location.href.");
-		logUrl('HREF Location', url);
-	    }
+	        if (url) {
+		        url = url.replace(/\r?\n/g, "");
+		        this._href = url;
+		        logIOC('HREF Location', {url}, "The script changed location.href.");
+		        logUrl('HREF Location', url);
+	        }
         },
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
-	style: {
-	    setProperty: function() {},
+	    style: {
+	        setProperty: function() {},
             display: "",
-	},
-	appendChild: function() {
+	    },
+	    appendChild: function() {
             return __createElement("__append__");
         },
         append: function() {
             return __createElement("__append__");
         },
-	prepend: function() {
+	    prepend: function() {
             return __createElement("__prepend__");
         },
         attributes: {},
@@ -662,7 +662,7 @@ function __createElement(tag) {
             if ((name === "src") || (name === "href")) {
                 if (val.startsWith("//")) val = "https:" + val;
                 logIOC('Element Source', {val}, "The script set the src or href field of an element.");
-	        logUrl('Element Source', val);
+	            logUrl('Element Source', val);
             }
         },
         setAttributeNode: function(name, val) {
@@ -689,9 +689,9 @@ function __createElement(tag) {
         lastChild: {
             nodeType: 3,
         },
-	sandbox: {
-	    add: function() {},
-	},
+	    sandbox: {
+	        add: function() {},
+	    },
         getElementsByTagName: __getElementsByTagName,
         getElementsByClassName: __getElementsByTagName,
         // Probably wrong, fix this if it causes problems.
@@ -704,13 +704,13 @@ function __createElement(tag) {
         select: function() {
             __currSelectedVal = this.val;
         },
-	setSelectionRange: function() {
-	    // Do we have an element value that might get selected?
-	    if (typeof(this.attributes["value"]) !== "undefined") {
-		this.val = this.attributes["value"];
-		__currSelectedVal = this.val;
-	    }	    
-	},
+	    setSelectionRange: function() {
+	        // Do we have an element value that might get selected?
+	        if (typeof(this.attributes["value"]) !== "undefined") {
+		        this.val = this.attributes["value"];
+		        __currSelectedVal = this.val;
+	        }	    
+	    },
         cloneNode: function() {
             //// Actually clone the element (deep copy).
             //return JSON.parse(JSON.stringify(this));
@@ -780,13 +780,13 @@ function __createElement(tag) {
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },        
-	removeChild: function() {return true;},
-	remove: function() {},
+	    removeChild: function() {return true;},
+	    remove: function() {},
         "classList" : {
             add: function() {},
             remove: function() {},
             trigger: function() {},
-	    toggle: function() {},
+	        toggle: function() {},
             // Trivial stubbing. Just say nothing is in the class
             // list. May need a flag to control this.
             contains: function(x) { return false; },
@@ -797,7 +797,7 @@ function __createElement(tag) {
         },
         isVisible: function() { return true; },
         _textContent: '',
-	innerText: '',
+	    innerText: '',
         get textContent() {
             if (typeof(this._textContent) === "undefined") this._textContent = '';
             return this._textContent;
@@ -807,6 +807,9 @@ function __createElement(tag) {
             logIOC('Element Text', {d}, "The script changed textContent of an element.");
         },
         focus: function() {},
+        attachShadow: function() {
+            return __createElement("__attachshadow__");
+        },
         getBoundingClientRect: function() {
             return {
                 top: 100,
@@ -1735,9 +1738,15 @@ jQuery.get = function(url) {
 // Looks like that can be a window field.
 window.jQuery = jQuery
 
+// TextEncoder support.
+const TextEncoder = nodeUtil.TextEncoder;
+const TextDecoder = nodeUtil.TextDecoder;
+
 // Initial WebPack stubbing.
 globalThis.location = location;
 globalThis.importScripts = true;
+globalThis.__name = "globalThis";
+globalThis.TextDecoder = TextDecoder;
 
 // Mejs module stubbing.
 var mejs = {
@@ -2165,10 +2174,6 @@ function callDynamicHandlers() {
 // Treat console.warn or .error like console.log.
 console.warn = console.log;
 console.error = console.log;
-
-// TextEncoder support.
-const TextEncoder = nodeUtil.TextEncoder;
-const TextDecoder = nodeUtil.TextDecoder;
 
 // **********
 // Stubbed Node-JS functions.
