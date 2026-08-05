@@ -542,6 +542,15 @@ function __makeFakeElem(data) {
             logIOC('Element Text', {textContent}, "The script changed textContent of an element.");
         },
         item: function() {},
+        _onclick: undefined,
+        set onclick(func) {
+            this._onclick = func;
+            // Call the click handler.
+            func();
+        },
+        get onclick() {
+            return this._onclick;
+        },
 	click: function() {},
         removeChild: function() {return true;},
 	remove: function() {},
@@ -654,7 +663,9 @@ function __createElement(tag) {
 	    prepend: function() {
             return __createElement("__prepend__");
         },
-        attributes: {},
+        attributes: {
+            "content" : '',
+        },
         setAttribute: function(name, val) {
             this.attributes[name] = val;
 
@@ -796,8 +807,9 @@ function __createElement(tag) {
             insertRule: function() {},
         },
         isVisible: function() { return true; },
+        content: '',
         _textContent: '',
-	    innerText: '',
+	innerText: '',
         get textContent() {
             if (typeof(this._textContent) === "undefined") this._textContent = '';
             return this._textContent;
