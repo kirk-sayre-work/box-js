@@ -854,13 +854,17 @@ if (argv["check"]) {
                 // enables acorn plugin needed by prototype rewrite
                 JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
             },
-        });	
+        });
 	console.log("JS syntax is valid.");
 	process.exit(0);
     } catch (e) {
 
 	// Try rewriting the code to see if it is then valid.
-	const rewrittenCode = rewrite(code);
+	const rewrittenCode = rewrite(code, useException=true);
+        if (rewrittenCode === 'throw("Parse Error")') {
+	    console.log("JS syntax is invalid.");
+	    process.exit(1);
+        }
 	try {
             let tree = acorn.parse(rewrittenCode, {
 		ecmaVersion: "latest",
@@ -872,7 +876,7 @@ if (argv["check"]) {
             });
 	    console.log("JS syntax is valid.");
 	    process.exit(0);
-	} catch (e) {	    
+	} catch (e) {
 	    console.log("JS syntax is invalid.");
 	    console.log(e);
 	    process.exit(1);
