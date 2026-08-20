@@ -53,12 +53,12 @@ if (argv["activex-as-ioc"]) {
 }
 
 /*
-if (code.match("<job") || code.match("<script")) { // The sample may actually be a .wsf, which is <job><script>..</script><script>..</script></job>.
-    lib.debug("Sample seems to be WSF");
-    code = code.replace(/<\??\/?\w+( [\w=\"\']*)*\??>/g, ""); // XML tags
-    code = code.replace(/<!\[CDATA\[/g, "");
-    code = code.replace(/\]\]>/g, "");
-}
+  if (code.match("<job") || code.match("<script")) { // The sample may actually be a .wsf, which is <job><script>..</script><script>..</script></job>.
+  lib.debug("Sample seems to be WSF");
+  code = code.replace(/<\??\/?\w+( [\w=\"\']*)*\??>/g, ""); // XML tags
+  code = code.replace(/<!\[CDATA\[/g, "");
+  code = code.replace(/\]\]>/g, "");
+  }
 */
 
 function lacksBinary(name) {
@@ -170,22 +170,22 @@ function hideStrs(s) {
         //console.log(window);
         
         // Start /* */ comment?
-	var oldInComment = inComment;
+        var oldInComment = inComment;
         inComment = inComment || ((prevChar == "/") && (currChar == "*") && !inStrDouble && !inStrSingle && !inCommentSingle && !inStrBackTick && (!inRegex || !oldInRegex));
         //console.log(JSON.stringify([prevPrevChar, prevChar, currChar, inStrDouble, inStrSingle, inCommentSingle, inComment, inRegex, oldInRegex, slashSubstr, justExitedComment]))
-	//console.log(r);
+        //console.log(r);
         
         // In /* */ comment?
         if (inComment) {
 
-	    // We are stripping /* */ comments, so drop the '/' if we
-	    // just entered the comment.
-	    if (oldInComment != inComment) {
+            // We are stripping /* */ comments, so drop the '/' if we
+            // just entered the comment.
+            if (oldInComment != inComment) {
                 inRegex = false;
                 r = r.slice(0, -1);
             }
-	    
-	    // Dropping /* */ comments, so don't save current char.
+            
+            // Dropping /* */ comments, so don't save current char.
 
             // Out of comment?
             if ((prevChar == "*") && (currChar == "/") && !skippedSpace) {
@@ -211,12 +211,12 @@ function hideStrs(s) {
 
         // Start // comment?
         inCommentSingle = inCommentSingle || ((prevChar == "/") && (currChar == "/") && !inStrDouble && !inStrSingle && !inComment && !justExitedComment && !inStrBackTick);
-	// Could have falsely jumped out of a /**/ comment if it contains a //.
-	if ((prevChar == "/") && (currChar == "/") && !inComment && justExitedComment) {
-	    inComment = true;
-	    justExitedComment = false;
-	    continue
-	}
+        // Could have falsely jumped out of a /**/ comment if it contains a //.
+        if ((prevChar == "/") && (currChar == "/") && !inComment && justExitedComment) {
+            inComment = true;
+            justExitedComment = false;
+            continue
+        }
         justExitedComment = false;
         
         // In // comment?
@@ -292,71 +292,71 @@ function hideStrs(s) {
         // Looking at an escaped back slash (1 char back)?
         escapedSlash = (prevChar == "\\" && prevPrevChar == "\\");
         
-	// Start/end single quoted string?
-	if ((currChar == "'") &&
+        // Start/end single quoted string?
+        if ((currChar == "'") &&
             ((prevChar != "\\") || ((prevChar == "\\") && ((slashSubstr.length % 2) == 0) && inStrSingle)) &&
             !inStrDouble && !inStrBackTick) {
 
-	    // Switch being in/out of string.
-	    inStrSingle = !inStrSingle;
+            // Switch being in/out of string.
+            inStrSingle = !inStrSingle;
 
-	    // Finished up a string we were tracking?
-	    if (!inStrSingle) {
-		currStr += "'";
+            // Finished up a string we were tracking?
+            if (!inStrSingle) {
+                currStr += "'";
                 const strName = "HIDE_" + counter++;
                 allStrs[strName] = currStr;
                 r += strName;
                 skip = true;
-	    }
-	    else {
-		currStr = "";
-	    }
-	};
+            }
+            else {
+                currStr = "";
+            }
+        };
 
-	// Start/end double quoted string?
-	if ((currChar == '"') &&
+        // Start/end double quoted string?
+        if ((currChar == '"') &&
             ((prevChar != "\\") || ((prevChar == "\\") && ((slashSubstr.length % 2) == 0) && inStrDouble)) &&
             !inStrSingle && !inStrBackTick && !inCommentSingle && !inComment && !inRegex) {
 
-	    // Switch being in/out of string.
-	    inStrDouble = !inStrDouble;
+            // Switch being in/out of string.
+            inStrDouble = !inStrDouble;
 
-	    // Finished up a string we were tracking?
-	    if (!inStrDouble) {
-		currStr += '"';
+            // Finished up a string we were tracking?
+            if (!inStrDouble) {
+                currStr += '"';
                 const strName = "HIDE_" + counter++;
                 allStrs[strName] = currStr;
                 r += strName;
                 skip = true;
-	    }
-	    else {
-		currStr = "";
-	    }
-	};
+            }
+            else {
+                currStr = "";
+            }
+        };
 
-	// Start/end backtick quoted string?
-	if ((currChar == '`') &&
+        // Start/end backtick quoted string?
+        if ((currChar == '`') &&
             ((prevChar != "\\") || ((prevChar == "\\") && escapedSlash && !prevEscapedSlash && inStrBackTick)) &&
             !inStrSingle && !inStrDouble && !inCommentSingle && !inComment && !inRegex) {
 
-	    // Switch being in/out of string.
-	    inStrBackTick = !inStrBackTick;
+            // Switch being in/out of string.
+            inStrBackTick = !inStrBackTick;
 
-	    // Finished up a string we were tracking?
-	    if (!inStrBackTick) {
-		currStr += '`';
+            // Finished up a string we were tracking?
+            if (!inStrBackTick) {
+                currStr += '`';
                 const strName = "HIDE_" + counter++;
                 allStrs[strName] = currStr;
                 r += strName;
                 skip = true;
-	    }
-	    else {
-		currStr = "";
-	    }
-	};
+            }
+            else {
+                currStr = "";
+            }
+        };
 
-	// Save the current character if we are tracking a string.
-	if (inStrDouble || inStrSingle || inStrBackTick) {
+        // Save the current character if we are tracking a string.
+        if (inStrDouble || inStrSingle || inStrBackTick) {
             currStr += currChar;
         }
 
@@ -367,8 +367,8 @@ function hideStrs(s) {
         };
         skip = false;
 
-	// Track what is now the previous character so we can handle
-	// escaped quotes in strings.
+        // Track what is now the previous character so we can handle
+        // escaped quotes in strings.
         prevPrevChar = prevChar;
         if (currChar != " ") prevChar = currChar;
         if (resetSlashes) prevChar = " ";
@@ -439,13 +439,13 @@ function extractCode(code) {
             const commentPat2 = /\/\*\s*@cc_on *\r?\n(.+?)\r?\n@\*\//;
             codeMatch = code.match(commentPat2);
             if (!codeMatch) {
-		// //@cc_on ... @*/
-		const commentPat3 = /\/\/\s*@cc_on(.+?)@\*\//;
-		codeMatch = code.match(commentPat3);
-		if (!codeMatch) {
+                // //@cc_on ... @*/
+                const commentPat3 = /\/\/\s*@cc_on(.+?)@\*\//;
+                codeMatch = code.match(commentPat3);
+                if (!codeMatch) {
                     return code;
-		}
-	    }
+                }
+            }
         }
     }
     var r = codeMatch[1];
@@ -469,8 +469,8 @@ function rewrite(code, useException=false) {
     
     // Don't rewrite huge samples. Cap at 5MB.
     if (code.length > 5e+6) {
-	lib.info("Sample too large. Not rewriting.");
-	return code;
+        lib.info("Sample too large. Not rewriting.");
+        return code;
     }
     lib.verbose("Rewriting code...", false);
     
@@ -515,19 +515,19 @@ function rewrite(code, useException=false) {
     //
     // Don't do this for huge samples.
     if (code.length < 2e6) {
-	var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
-	var rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[;]))/g;
-	code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
-	//code = code.toString().replace(rvaluePat, ';/* ASSIGNING TO RVALUE */');
+        var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
+        var rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[;]))/g;
+        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
+        //code = code.toString().replace(rvaluePat, ';/* ASSIGNING TO RVALUE */');
 
-	rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
-	rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[\n]))/g;
-	code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
-	//code = code.toString().replace(rvaluePat, ';// ASSIGNING TO RVALUE');
+        rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
+        rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[\n]))/g;
+        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
+        //code = code.toString().replace(rvaluePat, ';// ASSIGNING TO RVALUE');
 
-	//console.log("!!!! CODE: 2 !!!!");
-	//console.log(code);                
-	//console.log("!!!! CODE: 2 !!!!");
+        //console.log("!!!! CODE: 2 !!!!");
+        //console.log(code);                
+        //console.log("!!!! CODE: 2 !!!!");
     }
 
     // Now unhide the string literals.
@@ -552,9 +552,9 @@ function rewrite(code, useException=false) {
             // "@if" processing requires m4 and cc, but don't require them otherwise
             if (/@if/.test(code)) {
                 /*
-                	"@if (cond) source" becomes "\n _boxjs_if(cond)" with JS
-                	"\n _boxjs_if(cond)" becomes "\n #if (cond) \n source" with m4
-                	"\n #if (cond) \n source" becomes "source" with the C preprocessor
+                  "@if (cond) source" becomes "\n _boxjs_if(cond)" with JS
+                  "\n _boxjs_if(cond)" becomes "\n #if (cond) \n source" with m4
+                  "\n #if (cond) \n source" becomes "source" with the C preprocessor
                 */
                 code = code
                     .replace(/@if\s*/gi, "\n_boxjs_if")
@@ -653,6 +653,10 @@ cc decoder.c -o decoder
             return;
         }
 
+        //console.log("!!!! CODE: 4 !!!!");
+        //console.log(code);                
+        //console.log("!!!! CODE: 4 !!!!");
+        
         // Loop rewriting is looking for loops in the original unmodified code so
         // do this before any other modifications.
         if (argv["rewrite-loops"]) {
@@ -662,6 +666,10 @@ cc decoder.c -o decoder
             traverse(tree, loop_rewriter.rewriteLongWhileLoop);
         };
 
+        //console.log("!!!! CODE: 5 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 5 !!!!");
+        
         // Rewrite == checks so that comparisons of the current script name to
         // a hard coded script name always return true.
         if (argv["loose-script-name"] && code.includes("==")) {
@@ -669,6 +677,10 @@ cc decoder.c -o decoder
             traverse(tree, equality_rewriter.rewriteScriptCheck);
         }
 
+        //console.log("!!!! CODE: 6 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 6 !!!!");
+        
         if (argv.preprocess) {
             lib.verbose(`    Preprocessing with uglify-es v${require("uglify-es/package.json").version} (remove --preprocess to skip)...`, false);
             const unsafe = !!argv["unsafe-preprocess"];
@@ -726,6 +738,10 @@ cc decoder.c -o decoder
                 code = result.code;
             }
         }
+
+        //console.log("!!!! CODE: 7 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 7 !!!!");
         
         if (!argv["no-rewrite-prototype"]) {
             lib.verbose("    Replacing `function A.prototype.B()` (use --no-rewrite-prototype to skip)...", false);
@@ -740,11 +756,19 @@ cc decoder.c -o decoder
             });
         }
 
+        //console.log("!!!! CODE: 8 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 8 !!!!");
+        
         if (!argv["no-hoist-prototype"]) {
             lib.verbose("    Hoisting `function A.prototype.B()` (use --no-hoist-prototype to skip)...", false);
             hoist(tree);
         }
 
+        //console.log("!!!! CODE: 9 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 9 !!!!");
+        
         if (argv["function-rewrite"]) {
             lib.verbose("    Rewriting functions (remove --function-rewrite to skip)...", false);
             traverse(tree, function(key, val) {
@@ -759,6 +783,10 @@ cc decoder.c -o decoder
             });
         }
 
+        //console.log("!!!! CODE: 10 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 10 !!!!");
+        
         if (!argv["no-typeof-rewrite"]) {
             lib.verbose("    Rewriting typeof calls (use --no-typeof-rewrite to skip)...", false);
             traverse(tree, function(key, val) {
@@ -770,6 +798,10 @@ cc decoder.c -o decoder
             });
         }
 
+        //console.log("!!!! CODE: 11 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 11 !!!!");
+        
         if (!argv["no-eval-rewrite"]) {
             lib.verbose("    Rewriting eval calls (use --no-eval-rewrite to skip)...", false);
             traverse(tree, function(key, val) {
@@ -781,6 +813,10 @@ cc decoder.c -o decoder
             });
         }
 
+        //console.log("!!!! CODE: 12 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 12 !!!!");
+        
         if (!argv["no-catch-rewrite"]) { // JScript quirk
             lib.verbose("    Rewriting try/catch statements (use --no-catch-rewrite to skip)...", false);
             traverse(tree, function(key, val) {
@@ -800,6 +836,10 @@ cc decoder.c -o decoder
             });
         }
 
+        //console.log("!!!! CODE: 13 !!!!");
+        //console.log(escodegen.generate(tree));                
+        //console.log("!!!! CODE: 13 !!!!");
+        
         try{
             code = escodegen.generate(tree);
         }
@@ -807,12 +847,14 @@ cc decoder.c -o decoder
             lib.error("Couldn't generate rewritten code. Using original code:");
             lib.error(e);
             lib.error("");
-	    //console.log(orig_code);
+            //console.log(orig_code);
             return orig_code;
         }
-        //console.log("!!!! CODE !!!!");
-        //console.log(code);
 
+        //console.log("!!!! CODE: 14 !!!!");
+        //console.log(code);                
+        //console.log("!!!! CODE: 14 !!!!");
+        
         // The modifications may have resulted in more concatenations, eg. "a" + ("foo", "b") + "c" -> "a" + "b" + "c"
         if (argv["dumb-concat-simplify"]) {
             lib.verbose("    Simplifying \"dumb\" concatenations (remove --dumb-concat-simplify to skip)...", false);
@@ -820,16 +862,20 @@ cc decoder.c -o decoder
             code = code.replace(/"[ \r\n]*\+[ \r\n]*"/gm, "");
         }
 
+        //console.log("!!!! CODE: 15 !!!!");
+        //console.log(code);                
+        //console.log("!!!! CODE: 15 !!!!");
+        
         lib.verbose("Rewritten successfully.", false);
     } catch (e) {
-	if (argv["ignore-rewrite-errors"]) {
-	    lib.warning("Code rewriting failed. Analyzing original sample.");
-	}
-	else {
-	    console.log("An error occurred during rewriting:");
-	    console.log(e);
-	    process.exit(3);
-	}
+        if (argv["ignore-rewrite-errors"]) {
+            lib.warning("Code rewriting failed. Analyzing original sample.");
+        }
+        else {
+            console.log("An error occurred during rewriting:");
+            console.log(e);
+            process.exit(3);
+        }
     }
 
     return code;
@@ -839,14 +885,14 @@ cc decoder.c -o decoder
 if (argv["check"]) {
     try {
 
-	// Acorn gets fooled if the 1st line is a VBS "' ..."
-	// comment. Check for that.
-	if (code.trim()[0] == "'") {
-	    console.log("JS syntax is invalid.");
-	    process.exit(1);
-	}
-	
-	// Does the code parse?
+        // Acorn gets fooled if the 1st line is a VBS "' ..."
+        // comment. Check for that.
+        if (code.trim()[0] == "'") {
+            console.log("JS syntax is invalid.");
+            process.exit(1);
+        }
+        
+        // Does the code parse?
         let tree = acorn.parse(code, {
             ecmaVersion: "latest",
             allowReturnOutsideFunction: true, // used when rewriting function bodies
@@ -855,32 +901,32 @@ if (argv["check"]) {
                 JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
             },
         });
-	console.log("JS syntax is valid.");
-	process.exit(0);
+        console.log("JS syntax is valid.");
+        process.exit(0);
     } catch (e) {
 
-	// Try rewriting the code to see if it is then valid.
-	const rewrittenCode = rewrite(code, useException=true);
+        // Try rewriting the code to see if it is then valid.
+        const rewrittenCode = rewrite(code, useException=true);
         if (rewrittenCode === 'throw("Parse Error")') {
-	    console.log("JS syntax is invalid.");
-	    process.exit(1);
+            console.log("JS syntax is invalid.");
+            process.exit(1);
         }
-	try {
+        try {
             let tree = acorn.parse(rewrittenCode, {
-		ecmaVersion: "latest",
-		allowReturnOutsideFunction: true, // used when rewriting function bodies
-		plugins: {
+                ecmaVersion: "latest",
+                allowReturnOutsideFunction: true, // used when rewriting function bodies
+                plugins: {
                     // enables acorn plugin needed by prototype rewrite
                     JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
-		},
+                },
             });
-	    console.log("JS syntax is valid.");
-	    process.exit(0);
-	} catch (e) {
-	    console.log("JS syntax is invalid.");
-	    console.log(e);
-	    process.exit(1);
-	}
+            console.log("JS syntax is valid.");
+            process.exit(0);
+        } catch (e) {
+            console.log("JS syntax is invalid.");
+            console.log(e);
+            process.exit(1);
+        }
     }
 }
 
@@ -1039,13 +1085,13 @@ var wscript_proxy = new Proxy({
                     typeof: "unknown",
                 };
             case "named": {
-		var r = commandLineArgs;
-		r.Exists = function (arg) {
-		    // For now just say all args exist.
-		    return true;
-		};
+                var r = commandLineArgs;
+                r.Exists = function (arg) {
+                    // For now just say all args exist.
+                    return true;
+                };
                 return r;
-	    }
+            }
             default:
                 return new Proxy(
                     target[name], {
@@ -1147,7 +1193,7 @@ const sandbox = {
                 lib.logIOC("PayloadExec", x, "The script executed JS returned from a C2 server.");
             }
         },
-	clear: function() {},
+        clear: function() {},
     },
     Enumerator: require("./emulator/Enumerator"),
     GetObject: require("./emulator/WMI").GetObject,
@@ -1160,10 +1206,10 @@ const sandbox = {
     }, {
         get: function(target, name) {
             switch (name) {
-                case Symbol.toPrimitive:
-                    return () => "http://www.foobar.com/";
-                default:
-                    return target[name.toLowerCase()];
+            case Symbol.toPrimitive:
+                return () => "http://www.foobar.com/";
+            default:
+                return target[name.toLowerCase()];
             }
         },
     }),
@@ -1229,10 +1275,11 @@ if (argv["dangerous-vm"]) {
     
     // Dump interesting variable values to files for later analysis.
     if (argv["dump-vars"]) {
-	//argv["no-kill"] = true;
-	code += 'var _boxfso = undefined;\nvar _fileCount = 0;\nfor (var name in this) {\n    const val = this[name];\n    if (typeof(val) == "string") {\n        if ((val.match("http://") || val.match("https://")) && !val.match("mylegitdomain")) {\n            if (typeof(_boxfso == "undefined")) _boxfso = new ActiveXObject("Scripting.FileSystemObject");\n            const fname = "variable_value" + _fileCount + ".txt";\n            _fileCount++;\n            var stream = _boxfso.CreateTextFile(fname, true);\n            stream.Write(val);\n            stream.close();\n        }\n    }\n}\n';
+        //argv["no-kill"] = true;
+        code += 'var _boxfso = undefined;\nvar _fileCount = 0;\nfor (var name in this) {\n    const val = this[name];\n    if (typeof(val) == "string") {\n        if ((val.match("http://") || val.match("https://")) && !val.match("mylegitdomain")) {\n            if (typeof(_boxfso == "undefined")) _boxfso = new ActiveXObject("Scripting.FileSystemObject");\n            const fname = "variable_value" + _fileCount + ".txt";\n            _fileCount++;\n            var stream = _boxfso.CreateTextFile(fname, true);\n            stream.Write(val);\n            stream.close();\n        }\n    }\n}\n';
     }
-    
+
+    //console.log(code);
     try{
         vm.run(code);
     } catch (e) {
@@ -1283,23 +1330,23 @@ function _makeDomDocument() {
     const r = {
         __name: "_makeDomDocument()",
         createElement: function(tag) {
-	    const r = {
-		dataType: "??",
-		text: "",
-		get nodeTypedValue() {
-		    if (this.dataType != "bin.base64") return this.text;
-		    const b64Str = this.text.replace(/;tg&/g, "");
-		    return atob(b64Str);
-		},
-	    };
-	    return r;
-	},
+            const r = {
+                dataType: "??",
+                text: "",
+                get nodeTypedValue() {
+                    if (this.dataType != "bin.base64") return this.text;
+                    const b64Str = this.text.replace(/;tg&/g, "");
+                    return atob(b64Str);
+                },
+            };
+            return r;
+        },
         loadXML: function(s) {
             try {
-		// Save the XML as a dropped file.
-		if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
-		this._num_xml_files++;
-		lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
+                // Save the XML as a dropped file.
+                if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
+                this._num_xml_files++;
+                lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
                 this.document = new DOMParser().parseFromString(s);
                 this.documentElement = this.document.documentElement;
                 this.documentElement.document = this.document;
@@ -1312,9 +1359,9 @@ function _makeDomDocument() {
             }
             catch (e) { return false; };
         },
-	setProperty: function(field, val) {
-	    lib.logIOC("setProperty()", {field, val}, "The script called setProperty('" + field + "', " + val + "')");
-	},
+        setProperty: function(field, val) {
+            lib.logIOC("setProperty()", {field, val}, "The script called setProperty('" + field + "', " + val + "')");
+        },
     };
     return r;
 }
@@ -1345,14 +1392,14 @@ function ActiveXObject(name) {
         name_re = new RegExp(name, 'i');
         pos = rawcode.search(name_re);
         if (pos === -1) {
-	    if (name != "dom") {
-		lib.logIOC("Obfuscated ActiveX Object",{name}, `The script created a new ActiveX object ${name}, but the string was not found in the source.`);
-	    }
+            if (name != "dom") {
+                lib.logIOC("Obfuscated ActiveX Object",{name}, `The script created a new ActiveX object ${name}, but the string was not found in the source.`);
+            }
         }
         else {
-	    if (name != "dom") {
-		lib.logIOC("ActiveX Object Created",{name}, `The script created a new ActiveX object ${name}`);
-	    }
+            if (name != "dom") {
+                lib.logIOC("ActiveX Object Created",{name}, `The script created a new ActiveX object ${name}`);
+            }
         }
     }
 
@@ -1365,17 +1412,17 @@ function ActiveXObject(name) {
         return require("./emulator/XSLTemplate");
     }
     if ((name.match("domdocument")) || (name.match("xmldom"))) {
-	const r = _makeDomDocument();
+        const r = _makeDomDocument();
         return r;
     }
     if (name.match("htmlfile")) {
-	const r = {
+        const r = {
             __name: "htmlfile",
-	    "parentWindow" : {
-		"clipboardData" : "Some data",
-	    },
-	};
-	return r;
+            "parentWindow" : {
+                "clipboardData" : "Some data",
+            },
+        };
+        return r;
     }
     if (name.match("dom")) {
         const r = {
@@ -1388,13 +1435,13 @@ function ActiveXObject(name) {
             load: (filename) => {
                 console.log(`Loading ${filename} in a virtual DOM environment...`);
             },
-	    transformNode: function() {},
+            transformNode: function() {},
             loadXML: function(s) {
                 try {
-		    // Save the XML as a dropped file.
-		    if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
-		    this._num_xml_files++;
-		    lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
+                    // Save the XML as a dropped file.
+                    if (typeof(this._num_xml_files) === "undefined") this._num_xml_files = 0;
+                    this._num_xml_files++;
+                    lib.writeFile("Loaded_XML_" + this._num_xml_files, s);
                     this.document = new DOMParser().parseFromString(s);
                     this.documentElement = this.document.documentElement;
                     this.documentElement.document = this.document;
