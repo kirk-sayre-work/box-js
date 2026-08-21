@@ -17,41 +17,41 @@ function TextStream(filename) {
     });
     this.close = () => {};
     this.readall = () => {
-	return this.buffer;
+        return this.buffer;
     };
     this.readline = function() {
-	if (this.bufferarray.length === 0)
-	    this.bufferarray = this.buffer.split("\n");
-	return this.bufferarray.shift();
+        if (this.bufferarray.length === 0)
+            this.bufferarray = this.buffer.split("\n");
+        return this.bufferarray.shift();
     };
     this.shortpath = (path) => path;
     this.write = (line) => {
-	this.buffer = this.buffer + line;
-	lib.writeFile(filename, this.buffer);
-	lib.logResource(this.uuid, this.filename, this.buffer);
+        this.buffer = this.buffer + line;
+        lib.writeFile(filename, this.buffer);
+        lib.logResource(this.uuid, this.filename, this.buffer);
     };
     this.writeline = (line) => {
-	this.buffer = this.buffer + line + "\r\n";
-	lib.writeFile(filename, this.buffer);
-	lib.logResource(this.uuid, this.filename, this.buffer);
+        this.buffer = this.buffer + line + "\r\n";
+        lib.writeFile(filename, this.buffer);
+        lib.logResource(this.uuid, this.filename, this.buffer);
     };
 }
 
 function ProxiedTextStream(filename) {
     return new Proxy(new TextStream(filename), {
-	get: function(target, name) {
-	    name = name.toLowerCase();
-	    if (name in target) return target[name];
-	    lib.kill(`TextStream.${name} not implemented!`);
-	},
-	set: function(a, b, c) {
-	    b = b.toLowerCase();
-	    b = b.replace("bufferarray", "<internal buffer>");
-	    if (c.length < 1024 && !(c.length === 1 && c[0] === ""))
-		lib.info(`FSObject[${b}] = ${c};`);
-	    a[b] = c;
-	    return true;
-	},
+        get: function(target, name) {
+            name = name.toLowerCase();
+            if (name in target) return target[name];
+            lib.kill(`TextStream.${name} not implemented!`);
+        },
+        set: function(a, b, c) {
+            b = b.toLowerCase();
+            b = b.replace("bufferarray", "<internal buffer>");
+            if (c.length < 1024 && !(c.length === 1 && c[0] === ""))
+                lib.info(`FSObject[${b}] = ${c};`);
+            a[b] = c;
+            return true;
+        },
     });
 }
 
@@ -80,15 +80,18 @@ function Folder(path, autospawned) {
     //this.subfolders = autospawned ? [] : [new ProxiedFolder(path + "\\RandomFolder", true)];
     this.type = "folder";
     this.subfolders = makeFakeSubfolders(this.path);
+    this.registertask = function(name, def) {
+        lib.logIOC("Task", {name: name, def: def}, 'The sample registered task "' + name + '".');
+    };
 }
 
 function ProxiedFolder(path, name, autospawned = false) {
     return new Proxy(new Folder(path, name, autospawned), {
-	get: function(target, name) {
-	    name = name.toLowerCase();
-	    if (name in target) return target[name];
-	    lib.kill(`FileSystemObject.Folder.${name} not implemented!`);
-	},
+        get: function(target, name) {
+            name = name.toLowerCase();
+            if (name in target) return target[name];
+            lib.kill(`FileSystemObject.Folder.${name} not implemented!`);
+        },
     });
 }
 
@@ -112,9 +115,9 @@ function File(contents, name = "example-file.exe", typ = "Application") {
     this.size = Infinity;
     this.type = typ;
     this.copy = (src, dest, overwrite) => {
-	lib.logIOC("Copy", {src, dest}, "The script copied a file.");
-	lib.info(`Copying ${src} to ${dest}`);
-	lib.writeFile(dest, `(Contents of ${dest})`);
+        lib.logIOC("Copy", {src, dest}, "The script copied a file.");
+        lib.info(`Copying ${src} to ${dest}`);
+        lib.writeFile(dest, `(Contents of ${dest})`);
     };
 }
 
@@ -154,73 +157,73 @@ function ProxiedDrive(name) {
 function FileSystemObject() {
     this.buildpath = (...args) => args.join("\\");
     this.createfolder = (folder) => {
-	lib.logIOC("FolderCreate", {folder}, "The script created a folder.");
-	return "(Temporary new folder)";
+        lib.logIOC("FolderCreate", {folder}, "The script created a folder.");
+        return "(Temporary new folder)";
     }
     this.createtextfile = this.opentextfile = (filename) => new ProxiedTextStream(filename);
     this.copyfile = (src, dest, overwrite) => {
-	lib.logIOC("FileCopy", {src, dest}, "The script copied a file.");
-	lib.info(`Copying ${src} to ${dest}`);
-	lib.writeFile(dest, `(Contents of ${dest})`);
+        lib.logIOC("FileCopy", {src, dest}, "The script copied a file.");
+        lib.info(`Copying ${src} to ${dest}`);
+        lib.writeFile(dest, `(Contents of ${dest})`);
     };
     this.copy = this.copyfile;
     this.drives = [new ProxiedDrive("C:")];
     this.deletefile = (path) => {
-	lib.logIOC("FileDelete", {path}, "The script deleted a file.");
-	return true;
+        lib.logIOC("FileDelete", {path}, "The script deleted a file.");
+        return true;
     };
     this.deletefolder = (path) => {
-	lib.logIOC("FolderDelete", {path}, "The script deleted a folder.");
-	return true;
+        lib.logIOC("FolderDelete", {path}, "The script deleted a folder.");
+        return true;
     };
     this.fileexists = (path) => {
-	var value = !argv["no-file-exists"];
-	if (value) {
-	    lib.info(`Returning true for FileSystemObject.FileExists(${path}); use --no-file-exists if nothing happens`);
-	}
-	if (typeof(this._fileCheckCount) == "undefined") this._fileCheckCount = 0;
-	this._fileCheckCount++;
-	if (argv["limit-file-checks"] && (this._fileCheckCount > 100)) {
-	    // Flip whether the file exists or not to see if that
-	    // breaks a loop.
-	    value = !value;
-	    // Might break emulation based on WScript.quit(). Stop
-	    // ignoring WScript.quit().
-	    lib.doWscriptQuit(true);
-	}
+        var value = !argv["no-file-exists"];
+        if (value) {
+            lib.info(`Returning true for FileSystemObject.FileExists(${path}); use --no-file-exists if nothing happens`);
+        }
+        if (typeof(this._fileCheckCount) == "undefined") this._fileCheckCount = 0;
+        this._fileCheckCount++;
+        if (argv["limit-file-checks"] && (this._fileCheckCount > 100)) {
+            // Flip whether the file exists or not to see if that
+            // breaks a loop.
+            value = !value;
+            // Might break emulation based on WScript.quit(). Stop
+            // ignoring WScript.quit().
+            lib.doWscriptQuit(true);
+        }
         lib.logIOC("FileExists", path, "The script checked to see if a file exists.");
-	return value;
+        return value;
     };
     this.folderexists = (path) => {
-	var value = !argv["no-folder-exists"];
-	if (value) {
-	    lib.info(`Returning true for FileSystemObject.FolderExists(${path}); use --no-folder-exists if nothing happens`);
-	}
-	if (typeof(this._fileCheckCount) == "undefined") this._fileCheckCount = 0;
-	this._fileCheckCount++;
-	if (argv["limit-file-checks"] && (this._fileCheckCount > 500)) {
-	    // Flip whether the file exists or not to see if that
-	    // breaks a loop.
-	    value = !value;
-	    // Might break emulation based on WScript.quit(). Stop
-	    // ignoring WScript.quit().
-	    lib.doWscriptQuit(true);
-	}	
+        var value = !argv["no-folder-exists"];
+        if (value) {
+            lib.info(`Returning true for FileSystemObject.FolderExists(${path}); use --no-folder-exists if nothing happens`);
+        }
+        if (typeof(this._fileCheckCount) == "undefined") this._fileCheckCount = 0;
+        this._fileCheckCount++;
+        if (argv["limit-file-checks"] && (this._fileCheckCount > 500)) {
+            // Flip whether the file exists or not to see if that
+            // breaks a loop.
+            value = !value;
+            // Might break emulation based on WScript.quit(). Stop
+            // ignoring WScript.quit().
+            lib.doWscriptQuit(true);
+        }   
         lib.logIOC("FolderExists", path, "The script checked to see if a folder exists.");
-	return value;
+        return value;
     };
     this.getabsolutepathname = (path) => {
-	if (!winpath.isAbsolute(path)) path = "C:\\Users\\User\\Desktop\\" + path;
-	const ret = winpath.resolve(path);
+        if (!winpath.isAbsolute(path)) path = "C:\\Users\\User\\Desktop\\" + path;
+        const ret = winpath.resolve(path);
         lib.logIOC("FileSystemObject", {"path": path, "absolute": ret}, "The script got an absolute path.");
-	return ret;
+        return ret;
     };
     this.getdrive = (drive) => new ProxiedDrive(drive);
     this.getdrivename = (path) => {
-	const matches = path.match(/^\w:/);
-	if (matches === null)
-	    return "";
-	return matches[0];
+        const matches = path.match(/^\w:/);
+        if (matches === null)
+            return "";
+        return matches[0];
     };
     this.getfile = function(filename) {
         var r = new ProxiedFile(filename);
@@ -237,19 +240,19 @@ function FileSystemObject() {
     this.getfileversion = () => "";
     this.getfolder = (str) => new ProxiedFolder(str);
     this.getspecialfolder = function(id) {
-	const folders = {
-	    0: "C:\\WINDOWS\\",
-	    1: "C:\\WINDOWS\\(System folder)\\",
-	    2: "C:\\(Temporary folder)\\",
-	};
-	if (id in folders) return folders[id];
-	return `C:\\(Special folder ${id}\\`;
+        const folders = {
+            0: "C:\\WINDOWS\\",
+            1: "C:\\WINDOWS\\(System folder)\\",
+            2: "C:\\(Temporary folder)\\",
+        };
+        if (id in folders) return folders[id];
+        return `C:\\(Special folder ${id}\\`;
     };
     this.gettempname = () => "(Temporary file)";
     this.movefile = (src, dest, overwrite) => {
-	lib.logIOC("FileMove", {src, dest}, "The script moved a file.");
-	lib.info(`Moving ${src} to ${dest}`);
-	lib.writeFile(dest, `(Contents of ${dest})`);
+        lib.logIOC("FileMove", {src, dest}, "The script moved a file.");
+        lib.info(`Moving ${src} to ${dest}`);
+        lib.writeFile(dest, `(Contents of ${dest})`);
     };
     this.getparentfoldername = (path) => {
         var r = path;

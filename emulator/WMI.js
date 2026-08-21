@@ -1,6 +1,7 @@
 const lib = require("../lib");
 const fs = require("fs");
 const path = require("path");
+const wscriptnetwork = require("./WScriptNetwork.js");
 
 const diskSize = 1E12;
 const freeSpace = Math.floor(Math.random() * diskSize);
@@ -12,21 +13,21 @@ const tables = {
     antivirusproduct: [],
     win32_computersystemproduct: [],
     win32_logicaldisk: [{ // dirty patch by @ALange
-	deviceid: "C:",
-	drivetype: 3,
-	freespace: freeSpace,
-	size: diskSize,
-	volumeserialnumber: "B55B4A40",
+        deviceid: "C:",
+        drivetype: 3,
+        freespace: freeSpace,
+        size: diskSize,
+        volumeserialnumber: "B55B4A40",
     }],
     win32_diskdrive: [{
         deviceid: "C:",
-	model: "Seagate 8675",
-	interfacetype: "SCSI",
-	pnpdeviceid: "*PNP020a",
-	serialnumber: "WD-WL4492798726",
+        model: "Seagate 8675",
+        interfacetype: "SCSI",
+        pnpdeviceid: "*PNP020a",
+        serialnumber: "WD-WL4492798726",
     }],
     win32_systemdriver: [{
-	name: "ionbucket",
+        name: "ionbucket",
     }],
     win32_computersystem : [{
         "pscomputername" : "USER-PC",
@@ -217,36 +218,36 @@ const tables = {
 
 const classes = {
     win32_process: new Proxy(processes, {
-	get(target, _prop) {
-	    const prop = _prop.toLowerCase();
-	    if (prop in target) return target[prop];
-	    if (prop === "create")
-		return command => {
-		    lib.logIOC("CommandExec", command, "The script executed a command.");
-		    lib.logSnippet(lib.getUUID(), {as: "command"}, command);
-		}
-	    lib.kill(`Win32_Process.${prop} not implemented!`);
-	},
+        get(target, _prop) {
+            const prop = _prop.toLowerCase();
+            if (prop in target) return target[prop];
+            if (prop === "create")
+                return command => {
+                    lib.logIOC("CommandExec", command, "The script executed a command.");
+                    lib.logSnippet(lib.getUUID(), {as: "command"}, command);
+                }
+            lib.kill(`Win32_Process.${prop} not implemented!`);
+        },
     }),
     win32_processstartup: new Proxy({
-	spawninstance_: () => {
-	    return {};
-	}
+        spawninstance_: () => {
+            return {};
+        }
     }, {
-	get(target, _prop) {
-	    const prop = _prop.toLowerCase();
-	    if (prop in target) return target[prop];
-	    lib.kill(`Win32_ProcessStartup.${prop} not implemented!`);
-	},
+        get(target, _prop) {
+            const prop = _prop.toLowerCase();
+            if (prop in target) return target[prop];
+            lib.kill(`Win32_ProcessStartup.${prop} not implemented!`);
+        },
     })
 }
 
 Object.keys(tables).forEach(name => {
     if (/[A-Z]/.test(name))
-	lib.kill("Internal error: non-lowercase table name");
+        lib.kill("Internal error: non-lowercase table name");
     tables[name].forEach(row => Object.keys(row).forEach(label => {
-	if (/[A-Z]/.test(label))
-	    lib.kill("Internal error: non-lowercase property: '" + label + "'");
+        if (/[A-Z]/.test(label))
+            lib.kill("Internal error: non-lowercase property: '" + label + "'");
     }));
 });
 
@@ -255,26 +256,26 @@ function getTable(_tableName) {
     // Tell about interesting actions.
     const tableName = _tableName.toLowerCase();
     if (tableName === "win32_process")
-	lib.info("Script tried to read the list of processes");
+        lib.info("Script tried to read the list of processes");
     if (tableName === "win32_processstoptrace")
-	lib.info("Script tried to get information about stopped processes");
+        lib.info("Script tried to get information about stopped processes");
     if (tableName === "win32_computersystem")
-	lib.info("Script tried to read information about machine");
+        lib.info("Script tried to read information about machine");
     if (tableName === "win32_networkadapterconfiguration")
-	lib.info("Script tried to read information about network adapter");
+        lib.info("Script tried to read information about network adapter");
     if (tableName === "win32_operatingsystem")
-	lib.info("Script tried to read information about operating system");
+        lib.info("Script tried to read information about operating system");
     lib.verbose(`Script tried to read table ${tableName}`);
     if (!(tableName in tables))
-	lib.kill(`Table ${tableName} not implemented!`);
+        lib.kill(`Table ${tableName} not implemented!`);
     
     // Proxify everything for the normal case.
     return tables[tableName].map(row => new Proxy(row, {
-	get(target, _prop) {
-	    const prop = _prop.toLowerCase();
-	    if (prop in target) return target[prop];
-	    lib.kill(`${tableName}.${prop} not implemented!`);
-	},
+        get(target, _prop) {
+            const prop = _prop.toLowerCase();
+            if (prop in target) return target[prop];
+            lib.kill(`${tableName}.${prop} not implemented!`);
+        },
     }));
 }
 
@@ -282,15 +283,15 @@ function EventTable(baseTableName) {
 
     // Known table?
     if (!(baseTableName in tables))
-	lib.kill(`Table ${baseTableName} not implemented!`);
+        lib.kill(`Table ${baseTableName} not implemented!`);
 
     // Save the table data to serve out.
     this.tableData = tables[baseTableName].map(row => new Proxy(row, {
-	get(target, _prop) {
-	    const prop = _prop.toLowerCase();
-	    if (prop in target) return target[prop];
-	    lib.kill(`${tableName}.${prop} not implemented!`);
-	},
+        get(target, _prop) {
+            const prop = _prop.toLowerCase();
+            if (prop in target) return target[prop];
+            lib.kill(`${tableName}.${prop} not implemented!`);
+        },
     }));
     
     // Cycle through the table data.
@@ -313,18 +314,18 @@ function getNextEventTable(_tableName) {
     // Tell about interesting actions.
     const tableName = _tableName.toLowerCase();
     if (tableName === "win32_process")
-	lib.info("Script tried to read the list of processes");
+        lib.info("Script tried to read the list of processes");
     if (tableName === "win32_processstoptrace")
-	lib.info("Script tried to get information about stopped processes");
+        lib.info("Script tried to get information about stopped processes");
     if (tableName === "win32_computersystem")
-	lib.info("Script tried to read information about machine");
+        lib.info("Script tried to read information about machine");
     if (tableName === "win32_networkadapterconfiguration")
-	lib.info("Script tried to read information about network adapter");
+        lib.info("Script tried to read information about network adapter");
     if (tableName === "win32_operatingsystem")
-	lib.info("Script tried to read information about operating system");
+        lib.info("Script tried to read information about operating system");
     lib.verbose(`Script tried to read table ${tableName}`);
     if (!(tableName in tables))
-	lib.kill(`Table ${tableName} not implemented!`);
+        lib.kill(`Table ${tableName} not implemented!`);
 
     // Return an object with a NextEvent() method that returns the items
     // from the table.
@@ -350,111 +351,139 @@ module.exports.GetObject = function(name) {
     const lname = name.toLowerCase();
     if (lname.startsWith("script:http") || lname.startsWith("scriptlet:http")) {
         const url = lname.replace("script:http", "http");
-	lib.logUrl("GetObject()", url);
+        lib.logUrl("GetObject()", url);
         lib.logIOC("GetObject()", url, "The script used WMI to download a remote object.");
     }
 
     // Fake up an object.
     return new Proxy({
         UserName: "_Fake_Box-JS_User_",
-	InstancesOf: getTable,
-	ExecQuery: query => {
-	    // TODO: implement actual SQL
-	    const parts = query.match(/^select +(\*|(?:\w+, *)*(?:\w+)) +from +(\w+)/i);
-	    if (!parts)
-		lib.kill(`Not implemented: query "${query}"`);
-	    // For now, fields are ignored.
-	    // const fields = parts[1];
-	    const tableName = parts[2].toLowerCase();
-	    return getTable(tableName);
-	},
+        InstancesOf: getTable,
+        ExecQuery: query => {
+            // TODO: implement actual SQL
+            const parts = query.match(/^select +(\*|(?:\w+, *)*(?:\w+)) +from +(\w+)/i);
+            if (!parts)
+                lib.kill(`Not implemented: query "${query}"`);
+            // For now, fields are ignored.
+            // const fields = parts[1];
+            const tableName = parts[2].toLowerCase();
+            return getTable(tableName);
+        },
         ExecNotificationQuery: query => {
-	    // TODO: implement actual SQL
-	    const parts = query.match(/^select +(\*|(?:\w+, *)*(?:\w+)) +from +(\w+)/i);
-	    if (!parts)
-		lib.kill(`Not implemented: query "${query}"`);
-	    // For now, fields are ignored.
-	    // const fields = parts[1];
-	    const tableName = parts[2].toLowerCase();
-	    return getNextEventTable(tableName);
-	},
-	Get: className => {
-	    const _class = classes[className.toLowerCase()];
-	    if (!_class)
-		lib.kill(`Not implemented: WMI.Get(${className})`);
-	    return _class;
-	},
+            // TODO: implement actual SQL
+            const parts = query.match(/^select +(\*|(?:\w+, *)*(?:\w+)) +from +(\w+)/i);
+            if (!parts)
+                lib.kill(`Not implemented: query "${query}"`);
+            // For now, fields are ignored.
+            // const fields = parts[1];
+            const tableName = parts[2].toLowerCase();
+            return getNextEventTable(tableName);
+        },
+        Get: className => {
+            const _class = classes[className.toLowerCase()];
+            if (!_class)
+                lib.kill(`Not implemented: WMI.Get(${className})`);
+            return _class;
+        },
         Run: command => {
             lib.logIOC("WMI.GetObject.Run", command, "The script executed a command with WMI.");
-	    lib.logSnippet(lib.getUUID(), {as: "command"}, command);
-	    return "";
-	},
+            lib.logSnippet(lib.getUUID(), {as: "command"}, command);
+            return "";
+        },
         RUN: command => {
             lib.logIOC("WMI.GetObject.Run", command, "The script executed a command with WMI.");
-	    lib.logSnippet(lib.getUUID(), {as: "command"}, command);
-	    return "";
-	},        
-	Create: command => {
+            lib.logSnippet(lib.getUUID(), {as: "command"}, command);
+            return "";
+        },        
+        Create: command => {
             lib.logIOC("WMI.GetObject.Create", command, "The script created a process with WMI.");
-	    lib.logSnippet(lib.getUUID(), {as: "command"}, command);
-	    return "";
-	},
-	create: command => {
+            lib.logSnippet(lib.getUUID(), {as: "command"}, command);
+            return "";
+        },
+        create: command => {
             lib.logIOC("WMI.GetObject.Create", command, "The script created a process with WMI.");
-	    lib.logSnippet(lib.getUUID(), {as: "command"}, command);
-	    return "";
-	},
+            lib.logSnippet(lib.getUUID(), {as: "command"}, command);
+            return "";
+        },
         AddressWidth: foo => {
             lib.logIOC("WMI.GetObject.AddressWidth", "", "The script checked processor address width with WMI.");
-	    return "64";
-	},
-	Open: arg => {
-	    lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open('" + arg + "').");
-	},
+            return "64";
+        },
+        Open: arg => {
+            lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open('" + arg + "').");
+        },
         open: arg => {
             lib.logIOC("WMI.GetObject.Open", arg, "The script called WMI.GetObject.Open('" + arg + "').");
-	},
-	LoadFromFile: arg => {
-	    lib.logIOC("WMI.GetObject.LoadFromFile", arg, "The script called WMI.GetObject.LoadFromFile().");
-	},
-	ReadText: arg => {
-	    lib.logIOC("WMI.GetObject.ReadText", arg, "The script called WMI.GetObject.ReadText().");
-	},
-	Close: function () {},
-	GetParentFolderName: function () {
-	    return "C:/Users/Sysop/Desktop/"
-	},
-	SaveToFile: function(fname) {
-	    lib.logIOC("WMI.GetObject.SaveToFile", fname, "The script called WMI.GetObject.SaveToFile().");
-	},
-	DeleteFile: function(fname) {
-	    lib.logIOC("WMI.GetObject.DeleteFile", fname, "The script called WMI.GetObject.DeleteFile().");
-	},
+        },
+        LoadFromFile: arg => {
+            lib.logIOC("WMI.GetObject.LoadFromFile", arg, "The script called WMI.GetObject.LoadFromFile().");
+        },
+        ReadText: arg => {
+            lib.logIOC("WMI.GetObject.ReadText", arg, "The script called WMI.GetObject.ReadText().");
+        },
+        Close: function () {},
+        GetParentFolderName: function () {
+            return "C:/Users/Sysop/Desktop/"
+        },
+        SaveToFile: function(fname) {
+            lib.logIOC("WMI.GetObject.SaveToFile", fname, "The script called WMI.GetObject.SaveToFile().");
+        },
+        DeleteFile: function(fname) {
+            lib.logIOC("WMI.GetObject.DeleteFile", fname, "The script called WMI.GetObject.DeleteFile().");
+        },
         MoveFile: function(src, dest) {
-	    lib.logIOC("WMI.GetObject.MoveFile", {src: src, dest: dest}, "The script called WMI.GetObject.MoveFile().");
-	},
+            lib.logIOC("WMI.GetObject.MoveFile", {src: src, dest: dest}, "The script called WMI.GetObject.MoveFile().");
+        },
         ShellExecute: function(cmd) {
-	    lib.logIOC("WMI.GetObject.ShellExecute", cmd, "The script ran WMI.GetObject.ShellExecute('" + cmd + "').");
-	},
+            lib.logIOC("WMI.GetObject.ShellExecute", cmd, "The script ran WMI.GetObject.ShellExecute('" + cmd + "').");
+        },
         send: function(arg) {
-	    lib.logIOC("WMI.GetObject.send", arg, "The script ran WMI.GetObject.send('" + arg + "').");
-	},
+            lib.logIOC("WMI.GetObject.send", arg, "The script ran WMI.GetObject.send('" + arg + "').");
+        },
         getResponseHeader: function() {
-	    lib.info("The script ran WMI.GetObject.getResponseHeader().");
+            lib.info("The script ran WMI.GetObject.getResponseHeader().");
             return "{header}"
-	},
+        },
         SetBinaryValue: function(key, subkey, value, blob) {
             const fullKey = "" + subkey + "." + value;
             lib.logIOC("WMI.GetObject.SetBinaryValue", {key: fullKey}, "The script wrote to registry key " + fullKey + " via WMI.");
             lib.writeFile(fullKey + ".bin", blob);
         },
+        ExpandEnvironmentStrings: function(vname) {
+            const wscriptshell = require("./WScriptShell.js");
+            return wscriptshell.expandenvironmentstrings(vname);
+        },
+        FolderExists: function(name) {
+            const filesystemobject = require("./FileSystemObject.js");
+            return filesystemobject.folderexists(name);
+        },
+        CopyFile: function(src, dest, overwrite) {
+            const filesystemobject = require("./FileSystemObject.js");
+            return filesystemobject.copyfile(src, dest, overwrite);
+        },
+        UserDomain: wscriptnetwork.userdomain,
+        Connect: function() {
+            // ???
+        },
+        GetFolder: function(path) {
+            const filesystemobject = require("./FileSystemObject.js");
+            return filesystemobject.getfolder(path);
+        },
+        CreateFolder: function(path) {
+            const filesystemobject = require("./FileSystemObject.js");
+            return filesystemobject.createfolder(path);
+        },
+        WriteText: function(text) {
+            const adodb = require("./ADODBStream.js");
+            return adodb().writetext(text);
+        },
     }, {
-	get(target, name) {
+        get(target, name) {
             //console.log("^^^^^^^^^^^");
             //console.log(target);
             //console.log(name);
-	    if (name in target) return target[name];
-	    lib.kill(`WMI.GetObject.${name} not implemented!`);
-	},
+            if (name in target) return target[name];
+            lib.kill(`WMI.GetObject.${name} not implemented!`);
+        },
     });
 };
