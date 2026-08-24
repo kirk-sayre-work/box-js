@@ -107,7 +107,7 @@ const dummyEvent = {
     type: "FILL IN BASED ON FAKED HANDLER",
     
     // For Key events.
-    key: 97, // "a"
+    key: "97", // "a"
 
     stopPropagation: function() {},
     stopImmediatePropagation: function() {},
@@ -2650,9 +2650,164 @@ function _existsSync(path) {
 function _statSync(fname) {
     // Lie about the stats.
     return {
-	size : 1234,
-	mtime : {
-	    toISOString : function () { return "??"; },
-	},
+	    size : 1234,
+	    mtime : {
+	        toISOString : function () { return "??"; },
+	    },
     };
 }
+
+// ObjC stubbing. See https://tylergaw.com/blog/building-osx-apps-with-js/
+ObjC = {
+    __name: "ObjC",
+    import: function(pack) {
+    },
+    bindFunction: function(arg1, arg2) {
+        //console.log(arg1);
+        //console.log(arg2);
+    },
+    exit: function(code) {
+    },
+    unwrap: function() {
+        return "???";
+    },
+    deepUnwrap: function() {
+        return {
+            "a1" : 1,
+            "a2" : 1,
+            "a3" : 1,
+            "a4" : 1,
+            "a5" : 1,
+            "a6" : 1,
+            "a7" : 1,
+            "a8" : 1,
+            "a9" : 1,
+            "a10" : 1,
+            "a11" : 1,
+            "a12" : 1,
+            "a13" : 1,
+            "a14" : 1,
+            "a15" : 1,
+        };
+    },
+    castRefToObject: function() {
+        return "???";
+    },
+};
+this.ObjC = ObjC;
+$.exit = function(code) {
+};
+
+// JXA stubbing.
+NSFileHandle = {
+    __name: "NSFileHandle",
+    fileHandleWithStandardOutput: {
+        __name: "NSFileHandle::fileHandleWithStandardOutput",
+        writeData: function(data) {
+            console.log(data);
+        },
+    }
+};
+this.NSFileHandle = NSFileHandle;
+$.NSFileHandle = NSFileHandle;
+$.sysctlbyname = function(arg1, arg2, arg3) {
+    var val = 1;
+    if (arg1 === "kern.hv_vmm_present") val = 0;
+    if (arg1 === "hw.optional.arm64") val = 1;
+    if (Array.isArray(arg2)){
+        arg2.length = 0;
+        arg2.push(val, 0);
+    }
+    if (Array.isArray(arg3)){
+        arg3.length = 0;
+        arg3.push(val, 0);
+    }
+    return 0;
+}
+$.malloc = function(size) {
+    return [];
+};
+$.free = function() {};
+$.csr_get_active_config = function() {
+    return 1;
+};
+$.IOServiceMatching = function() {
+    return "???";
+};
+$.IOServiceGetMatchingService = function() {
+    return "???";
+};
+$.IORegistryEntryCreateCFProperties = function() {
+    return 0;
+}
+$.IOObjectRelease = function() {};
+
+// JXA stubbing.
+NSString = {
+    __name: "NSString",
+    alloc: {
+        initWithString: function(s) {
+            return {
+                __name: "NSString::alloc::initWithString",
+                toString: function() {
+                    return s;
+                },
+                dataUsingEncoding: function() {
+                    return s;
+                },
+                isNil: function() {
+                    return false;
+                },
+            };
+        },
+        initWithDataEncoding: function(s) {
+            return {
+                __name: "NSString::alloc::initWithDataEncoding",
+                toString: function() {
+                    return s;
+                },
+                dataUsingEncoding: function() {
+                    return s;
+                },
+                isNil: function() {
+                    return false;
+                },
+            };
+        },
+    }
+};
+this.NSString = NSString;
+$.NSString = NSString;
+
+// JXA stubbing.
+this.NSUTF8StringEncoding = "??";
+$.NSUTF8StringEncoding = "??";
+
+// JXA stubbing.
+Application = {
+    currentApplication: function() {
+        return {
+            includeStandardAdditions: false,
+            doShellScript: function(script) {
+                lib.runShellCommand(script);
+            },
+        };
+    },
+}
+
+// JXA stubbing.
+Ref = function() {
+    return [];
+}
+
+// JXA stubbing.
+NSData = {
+    dataWithBytesLength: function() {
+        return {
+            isNil: function() {
+                return false;
+            },
+        };
+    },
+};
+$.NSData = NSData;
