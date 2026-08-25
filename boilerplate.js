@@ -1660,7 +1660,7 @@ var funcDict = {
     blur: function() {},
     submit: function(func) {
         func(dummyEvent);
-    },
+    },    
     hide: function() {},
     keypress: function() {},
     animate: function() {},
@@ -1687,7 +1687,13 @@ var jQuery = function(field){
     };
     // If we have $('string') it looks like we should get some JQuery
     // object back.
-    return funcDict;
+    var r = {...funcDict};
+    r._field = field;
+    // JXA
+    r.stringByExpandingTildeInPath = {
+        js: ("" + field).replace(/~/g, "/Users/legituser"),
+    };
+    return r;
 };
 
 // Global object form of jQuery.
@@ -2669,7 +2675,7 @@ ObjC = {
     exit: function(code) {
     },
     unwrap: function() {
-        return "???";
+        return "arm64";
     },
     deepUnwrap: function() {
         return {
@@ -2751,12 +2757,27 @@ $.NSProcessInfo = {
         },
     },
 };
-// .NSDate.date
 $.NSDate = {
     date: {
         timeIntervalSinceNow: -0.1,
     },
+    dateWithTimeIntervalSinceNow: function() {
+        return "??";
+    }
 };
+$.NSTimeZone = {
+    systemTimeZone: null,
+};
+$.CFLocaleCopyCurrent = function() {
+    return "??";
+};
+$.CFLocaleGetIdentifier = function() {
+    return "de-DE";
+};
+$.CFLocaleGetValue = function() {
+    return "de-DE";
+};
+$.CFRelease = function() {};
 
 // JXA stubbing.
 NSString = {
@@ -2790,10 +2811,14 @@ NSString = {
                 },
             };
         },
+        initWithSuiteName: function(s) {
+            return null;
+        },
     }
 };
 this.NSString = NSString;
 $.NSString = NSString;
+$.NSUserDefaults = NSString;
 
 // JXA stubbing.
 this.NSUTF8StringEncoding = "??";
@@ -2827,3 +2852,57 @@ NSData = {
     },
 };
 $.NSData = NSData;
+
+// JXA stubbing.
+NSFileManager = {
+    defaultManager: {
+        fileExistsAtPath: function(path) {
+            return false;
+        },
+        createDirectoryAtPathWithIntermediateDirectoriesAttributesError: function(dirname) {
+        },
+    },
+};
+$.NSFileManager = NSFileManager;
+
+// JXA stubbing.
+NSURLSession = {
+    sessionWithConfiguration: function() {
+        return {
+            dataTaskWithURLCompletionHandler: function(url, callback) {
+                url = "" + url;
+                logIOC("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", {url}, "The script downloaded a URL with $.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler().");
+                logUrl("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", url);
+                // Figure out what to do with the callback later.
+
+                return {
+                    resume: "??",
+                };
+            },
+        };
+    },
+}
+$.NSURLSession = NSURLSession;
+
+// JXA stubbing.
+NSURLSessionConfiguration = {
+    ephemeralSessionConfiguration: "??",
+};
+$.NSURLSessionConfiguration = NSURLSessionConfiguration;
+
+// JXA stubbing.
+NSURL = {
+    URLWithString: function(url) {
+        const r = "" + url;
+        return r;
+    },
+}
+$.NSURL = NSURL;
+
+// JXA stubbing.
+NSRunLoop = {
+    currentRunLoop: {
+        runUntilDate: function() {},
+    },
+}
+$.NSRunLoop = NSRunLoop;
