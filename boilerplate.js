@@ -2710,6 +2710,8 @@ NSFileHandle = {
     fileHandleWithStandardOutput: {
         __name: "NSFileHandle::fileHandleWithStandardOutput",
         writeData: function(data) {
+            data = data.replace(/\n/g, "\\n");
+            data = data.replace(/[^ -~]/g, "").replace(/\[2K/, "");
             console.log(data);
         },
     }

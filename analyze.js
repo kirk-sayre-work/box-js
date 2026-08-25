@@ -1262,6 +1262,10 @@ if (argv["dangerous-vm"]) {
     // document loading.
     code += "\nif ((typeof(document) != 'undefined') && (typeof(document.body) != 'undefined') && (typeof(document.body.onload) != 'undefined')) document.body.onload();\n"
 
+    // Mac JXA applications have a run() function that is called to
+    // kick things off. Call that if it is defined.
+    code += "\nif (typeof(run) === \"function\") run();\n"
+    
     // Run all of the collected onclick handler code snippets pulled
     // from dynamically added HTML.
     code += "\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
