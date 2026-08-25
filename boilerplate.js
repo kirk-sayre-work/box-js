@@ -680,8 +680,8 @@ function __createElement(tag) {
             if (typeof(val) !== "undefined") {
                 this.attributes[name] = val;
             };
-            if ((typeof(name.nodeValue !== "undefined")) &&
-                (typeof(name.nodeValue.valueOf == "function"))) {
+            if ((typeof(name.nodeValue) !== "undefined") &&
+                (typeof(name.nodeValue.valueOf) == "function")) {
                 name.nodeValue.valueOf();
             };
         },
@@ -1688,7 +1688,7 @@ var jQuery = function(field){
     // If we have $('string') it looks like we should get some JQuery
     // object back.
     var r = {...funcDict};
-    r._field = field;
+    r._field = "" + field;
     // JXA
     r.stringByExpandingTildeInPath = {
         js: ("" + field).replace(/~/g, "/Users/legituser"),
@@ -2814,7 +2814,12 @@ NSString = {
         initWithSuiteName: function(s) {
             return null;
         },
-    }
+    },
+    stringWithString: function(s) {
+        var r = new String("" + s);
+        r.dataUsingEncoding = function() { return this; };
+        return r;
+    },
 };
 this.NSString = NSString;
 $.NSString = NSString;
@@ -2861,6 +2866,23 @@ NSFileManager = {
         },
         createDirectoryAtPathWithIntermediateDirectoriesAttributesError: function(dirname) {
         },
+        createFileAtPathContentsAttributes: function(fname, contents) {
+            if (fname.__name === "funcDict") {
+                fname = fname._field;
+            };
+            fname = "" + fname;
+            if (contents.__name === "funcDict") {
+                contents = contents._field;
+            };
+            contents = "" + contents;
+            logIOC("FileWrite", {file: fname, contents}, "The script wrote file '" + fname + "'.");
+            return true;
+        },
+        copyItemAtPathToPathError: function(src, dest) {
+            lib.logIOC("Copy", {src, dest}, "The script copied a file.");
+            lib.info(`Copying ${src} to ${dest}`);
+            lib.writeFile(dest, `(Contents of ${dest})`);
+        },
     },
 };
 $.NSFileManager = NSFileManager;
@@ -2873,8 +2895,23 @@ NSURLSession = {
                 url = "" + url;
                 logIOC("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", {url}, "The script downloaded a URL with $.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler().");
                 logUrl("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", url);
-                // Figure out what to do with the callback later.
 
+                // Call the callback with fake data indicating the
+                // HTTP request succeeded.
+                const parm1 = {
+                    isNil: function() { return false; },
+                    length: 100,
+                };
+                const parm2 = {
+                    statusCode: 200,
+                };
+                const parm3 = {
+                    isNil: function() { return true; },
+                };
+                if (typeof(callback) == "function") {
+                    callback(parm1, parm2, parm3);
+                };
+                
                 return {
                     resume: "??",
                 };
@@ -2906,3 +2943,11 @@ NSRunLoop = {
     },
 }
 $.NSRunLoop = NSRunLoop;
+
+// JXA stubbing.
+NSDictionary = {
+    dictionaryWithObjectForKey: function() {
+        return "??";
+    },
+};
+$.NSDictionary = NSDictionary;
