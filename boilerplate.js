@@ -2724,6 +2724,8 @@ $.sysctlbyname = function(arg1, arg2, arg3) {
     }
     return 0;
 }
+
+// JXA stubbing, misc.
 $.malloc = function(size) {
     return [];
 };
@@ -2741,6 +2743,20 @@ $.IORegistryEntryCreateCFProperties = function() {
     return 0;
 }
 $.IOObjectRelease = function() {};
+$.ptrace = function() { return 0; };
+$.NSProcessInfo = {
+    processInfo: {
+        environment: {
+            "??" : 1,
+        },
+    },
+};
+// .NSDate.date
+$.NSDate = {
+    date: {
+        timeIntervalSinceNow: -0.1,
+    },
+};
 
 // JXA stubbing.
 NSString = {
