@@ -2839,6 +2839,9 @@ Application = {
             doShellScript: function(script) {
                 lib.runShellCommand(script);
             },
+            displayAlert: function(arg1, msg) {
+                console.log("displayAlert(): " + msg.message)
+            },
         };
     },
 }
@@ -2890,36 +2893,38 @@ NSFileManager = {
 $.NSFileManager = NSFileManager;
 
 // JXA stubbing.
-NSURLSession = {
-    sessionWithConfiguration: function() {
+_session = {
+    dataTaskWithURLCompletionHandler: function(url, callback) {
+        url = "" + url;
+        logIOC("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", {url}, "The script downloaded a URL with $.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler().");
+        logUrl("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", url);
+        
+        // Call the callback with fake data indicating the
+        // HTTP request succeeded.
+        const parm1 = {
+            isNil: function() { return false; },
+            length: 100,
+        };
+        const parm2 = {
+            statusCode: 200,
+        };
+        const parm3 = {
+            isNil: function() { return true; },
+        };
+        if (typeof(callback) == "function") {
+            callback(parm1, parm2, parm3);
+        };
+        
         return {
-            dataTaskWithURLCompletionHandler: function(url, callback) {
-                url = "" + url;
-                logIOC("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", {url}, "The script downloaded a URL with $.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler().");
-                logUrl("$.NSURLSession.sessionWithConfiguration().dataTaskWithURLCompletionHandler()", url);
-
-                // Call the callback with fake data indicating the
-                // HTTP request succeeded.
-                const parm1 = {
-                    isNil: function() { return false; },
-                    length: 100,
-                };
-                const parm2 = {
-                    statusCode: 200,
-                };
-                const parm3 = {
-                    isNil: function() { return true; },
-                };
-                if (typeof(callback) == "function") {
-                    callback(parm1, parm2, parm3);
-                };
-                
-                return {
-                    resume: "??",
-                };
-            },
+            resume: "??",
         };
     },
+};
+NSURLSession = {
+    sessionWithConfiguration: function() {
+        return _session;
+    },
+    sharedSession: _session,
 }
 $.NSURLSession = NSURLSession;
 
@@ -2932,6 +2937,10 @@ $.NSURLSessionConfiguration = NSURLSessionConfiguration;
 // JXA stubbing.
 NSURL = {
     URLWithString: function(url) {
+        const r = "" + url;
+        return r;
+    },
+    fileURLWithPath: function(url) {
         const r = "" + url;
         return r;
     },
@@ -2953,3 +2962,16 @@ NSDictionary = {
     },
 };
 $.NSDictionary = NSDictionary;
+
+$.NSWorkspace = {
+    sharedWorkspace: {
+        openApplicationAtURLConfigurationCompletionHandler: function(url, payload, callback) {
+            url = "" + url;
+            logIOC("$.NSWorkSpace.sharedWorkspace.openApplicationAtURLConfigurationCompletionHandler()", {url}, "The script launched an app with $.NSWorkSpace.sharedWorkspace.openApplicationAtURLConfigurationCompletionHandler().");
+        },
+    }
+};
+
+$.NSWorkspaceOpenConfiguration = {
+    configuration: "??",
+};
