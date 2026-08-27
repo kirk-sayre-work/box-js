@@ -1697,8 +1697,10 @@ var jQuery = function(field){
     var r = {...funcDict};
     r._field = "" + field;
     // JXA
+    const tilde = ("" + field).replace(/~/g, "/Users/legituser");
     r.stringByExpandingTildeInPath = {
-        js: ("" + field).replace(/~/g, "/Users/legituser"),
+        js: tilde,
+        stringByDeletingLastPathComponent: tilde,
     };
     return r;
 };
@@ -2789,41 +2791,50 @@ $.CFLocaleGetValue = function() {
 $.CFRelease = function() {};
 
 // JXA stubbing.
-NSString = {
-    __name: "NSString",
-    alloc: {
-        initWithString: function(s) {
-            return {
-                __name: "NSString::alloc::initWithString",
-                toString: function() {
-                    return s;
-                },
-                dataUsingEncoding: function() {
-                    return s;
-                },
-                isNil: function() {
-                    return false;
-                },
-            };
-        },
-        initWithDataEncoding: function(s) {
-            return {
-                __name: "NSString::alloc::initWithDataEncoding",
-                toString: function() {
-                    return s;
-                },
-                dataUsingEncoding: function() {
-                    return s;
-                },
-                isNil: function() {
-                    return false;
-                },
-            };
-        },
-        initWithSuiteName: function(s) {
-            return null;
+_alloc = {
+    initWithString: function(s) {
+        return {
+            __name: "alloc::initWithString",
+            toString: function() {
+                return s;
+            },
+            dataUsingEncoding: function() {
+                return s;
+            },
+            isNil: function() {
+                return false;
+            },
+        };
+    },
+    initWithDataEncoding: function(s) {
+        return {
+            __name: "alloc::initWithDataEncoding",
+            toString: function() {
+                return s;
+            },
+            dataUsingEncoding: function() {
+                return s;
+            },
+            isNil: function() {
+                return false;
+            },
+        };
+    },
+    initWithSuiteName: function(s) {
+        return null;
+    },
+    init: {
+        executableURL: "??",
+        launchAndReturnError: function() {
+            //url = "" + this.executableURL;
+            //logIOC("$.NSTask.alloc.init.launchAndReturnError()", {url}, "The script downloaded a URL with $.NSTask.alloc.init.launchAndReturnError().");
+            //logUrl("$.NSTask.alloc.init.launchAndReturnError()", url);
         },
     },
+};
+NSString = {
+    __name: "NSString",
+    alloc: _alloc,
     stringWithString: function(s) {
         var r = new String("" + s);
         r.dataUsingEncoding = function() { return this; };
@@ -2867,6 +2878,16 @@ NSData = {
             },
         };
     },
+    dataWithContentsOfURL: function(url) {
+        url = "" + url;
+        logIOC("$.NSData.dataWithContentsOfURL()", {url}, "The script downloaded a URL with $.NSData.dataWithContentsOfURL().");
+        logUrl("$.NSData.dataWithContentsOfURL()", url);
+        return {
+            isNil: function() {
+                return false;
+            },
+        };
+    },
 };
 $.NSData = NSData;
 
@@ -2877,6 +2898,8 @@ NSFileManager = {
             return false;
         },
         createDirectoryAtPathWithIntermediateDirectoriesAttributesError: function(dirname) {
+            dirname = "" + dirname;
+            lib.logIOC("FolderCreate", {dirname}, "The script created folder '" + dirname + "'.");
         },
         createFileAtPathContentsAttributes: function(fname, contents) {
             if (fname.__name === "funcDict") {
@@ -2979,6 +3002,12 @@ $.NSWorkspace = {
     }
 };
 
+// JXA stubbing.
 $.NSWorkspaceOpenConfiguration = {
     configuration: "??",
+};
+
+// JXA stubbing.
+$.NSTask = {
+    alloc: _alloc,
 };
