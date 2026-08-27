@@ -119,7 +119,7 @@ const dummyEvent = {
     },
     path: "I'm an event path!",
     data: {
-	type: "???",
+        type: "???",
     },
     originalEvent: "??",
 };
@@ -217,103 +217,103 @@ function btoa(data) {
  * instead of throwing INVALID_CHARACTER_ERR we return null.
  */
 function atob(data) {
-  // Web IDL requires DOMStrings to just be converted using ECMAScript
-  // ToString, which in our case amounts to using a template literal.
-  data = `${data}`;
-  // "Remove all ASCII whitespace from data."
-  data = data.replace(/[ \t\n\f\r]/g, "");
-  // "If data's length divides by 4 leaving no remainder, then: if data ends
-  // with one or two U+003D (=) code points, then remove them from data."
-  if (data.length % 4 === 0) {
-    data = data.replace(/==?$/, "");
-  }
-  // "If data's length divides by 4 leaving a remainder of 1, then return
-  // failure."
-  //
-  // "If data contains a code point that is not one of
-  //
-  // U+002B (+)
-  // U+002F (/)
-  // ASCII alphanumeric
-  //
-  // then return failure."
-  if (data.length % 4 === 1 || /[^+/0-9A-Za-z]/.test(data)) {
-    return null;
-  }
-  // "Let output be an empty byte sequence."
-  let output = "";
-  // "Let buffer be an empty buffer that can have bits appended to it."
-  //
-  // We append bits via left-shift and or.  accumulatedBits is used to track
-  // when we've gotten to 24 bits.
-  let buffer = 0;
-  let accumulatedBits = 0;
-  // "Let position be a position variable for data, initially pointing at the
-  // start of data."
-  //
-  // "While position does not point past the end of data:"
-  for (let i = 0; i < data.length; i++) {
-    // "Find the code point pointed to by position in the second column of
-    // Table 1: The Base 64 Alphabet of RFC 4648. Let n be the number given in
-    // the first cell of the same row.
-    //
-    // "Append to buffer the six bits corresponding to n, most significant bit
-    // first."
-    //
-    // atobLookup() implements the table from RFC 4648.
-    buffer <<= 6;
-    buffer |= atobLookup(data[i]);
-    accumulatedBits += 6;
-    // "If buffer has accumulated 24 bits, interpret them as three 8-bit
-    // big-endian numbers. Append three bytes with values equal to those
-    // numbers to output, in the same order, and then empty buffer."
-    if (accumulatedBits === 24) {
-      output += String.fromCharCode((buffer & 0xff0000) >> 16);
-      output += String.fromCharCode((buffer & 0xff00) >> 8);
-      output += String.fromCharCode(buffer & 0xff);
-      buffer = accumulatedBits = 0;
+    // Web IDL requires DOMStrings to just be converted using ECMAScript
+    // ToString, which in our case amounts to using a template literal.
+    data = `${data}`;
+    // "Remove all ASCII whitespace from data."
+    data = data.replace(/[ \t\n\f\r]/g, "");
+    // "If data's length divides by 4 leaving no remainder, then: if data ends
+    // with one or two U+003D (=) code points, then remove them from data."
+    if (data.length % 4 === 0) {
+        data = data.replace(/==?$/, "");
     }
-    // "Advance position by 1."
-  }
-  // "If buffer is not empty, it contains either 12 or 18 bits. If it contains
-  // 12 bits, then discard the last four and interpret the remaining eight as
-  // an 8-bit big-endian number. If it contains 18 bits, then discard the last
-  // two and interpret the remaining 16 as two 8-bit big-endian numbers. Append
-  // the one or two bytes with values equal to those one or two numbers to
-  // output, in the same order."
-  if (accumulatedBits === 12) {
-    buffer >>= 4;
-    output += String.fromCharCode(buffer);
-  } else if (accumulatedBits === 18) {
-    buffer >>= 2;
-    output += String.fromCharCode((buffer & 0xff00) >> 8);
-    output += String.fromCharCode(buffer & 0xff);
-  }
-  // "Return output."
-  return output;
+    // "If data's length divides by 4 leaving a remainder of 1, then return
+    // failure."
+    //
+    // "If data contains a code point that is not one of
+    //
+    // U+002B (+)
+    // U+002F (/)
+    // ASCII alphanumeric
+    //
+    // then return failure."
+    if (data.length % 4 === 1 || /[^+/0-9A-Za-z]/.test(data)) {
+        return null;
+    }
+    // "Let output be an empty byte sequence."
+    let output = "";
+    // "Let buffer be an empty buffer that can have bits appended to it."
+    //
+    // We append bits via left-shift and or.  accumulatedBits is used to track
+    // when we've gotten to 24 bits.
+    let buffer = 0;
+    let accumulatedBits = 0;
+    // "Let position be a position variable for data, initially pointing at the
+    // start of data."
+    //
+    // "While position does not point past the end of data:"
+    for (let i = 0; i < data.length; i++) {
+        // "Find the code point pointed to by position in the second column of
+        // Table 1: The Base 64 Alphabet of RFC 4648. Let n be the number given in
+        // the first cell of the same row.
+        //
+        // "Append to buffer the six bits corresponding to n, most significant bit
+        // first."
+        //
+        // atobLookup() implements the table from RFC 4648.
+        buffer <<= 6;
+        buffer |= atobLookup(data[i]);
+        accumulatedBits += 6;
+        // "If buffer has accumulated 24 bits, interpret them as three 8-bit
+        // big-endian numbers. Append three bytes with values equal to those
+        // numbers to output, in the same order, and then empty buffer."
+        if (accumulatedBits === 24) {
+            output += String.fromCharCode((buffer & 0xff0000) >> 16);
+            output += String.fromCharCode((buffer & 0xff00) >> 8);
+            output += String.fromCharCode(buffer & 0xff);
+            buffer = accumulatedBits = 0;
+        }
+        // "Advance position by 1."
+    }
+    // "If buffer is not empty, it contains either 12 or 18 bits. If it contains
+    // 12 bits, then discard the last four and interpret the remaining eight as
+    // an 8-bit big-endian number. If it contains 18 bits, then discard the last
+    // two and interpret the remaining 16 as two 8-bit big-endian numbers. Append
+    // the one or two bytes with values equal to those one or two numbers to
+    // output, in the same order."
+    if (accumulatedBits === 12) {
+        buffer >>= 4;
+        output += String.fromCharCode(buffer);
+    } else if (accumulatedBits === 18) {
+        buffer >>= 2;
+        output += String.fromCharCode((buffer & 0xff00) >> 8);
+        output += String.fromCharCode(buffer & 0xff);
+    }
+    // "Return output."
+    return output;
 }
 /**
  * A lookup table for atob(), which converts an ASCII character to the
  * corresponding six-bit number.
  */
 function atobLookup(chr) {
-  if (/[A-Z]/.test(chr)) {
-    return chr.charCodeAt(0) - "A".charCodeAt(0);
-  }
-  if (/[a-z]/.test(chr)) {
-    return chr.charCodeAt(0) - "a".charCodeAt(0) + 26;
-  }
-  if (/[0-9]/.test(chr)) {
-    return chr.charCodeAt(0) - "0".charCodeAt(0) + 52;
-  }
-  if (chr === "+") {
-    return 62;
-  }
-  if (chr === "/") {
-    return 63;
-  }
-  // Throw exception; should not be hit in tests
-  return undefined;
+    if (/[A-Z]/.test(chr)) {
+        return chr.charCodeAt(0) - "A".charCodeAt(0);
+    }
+    if (/[a-z]/.test(chr)) {
+        return chr.charCodeAt(0) - "a".charCodeAt(0) + 26;
+    }
+    if (/[0-9]/.test(chr)) {
+        return chr.charCodeAt(0) - "0".charCodeAt(0) + 52;
+    }
+    if (chr === "+") {
+        return 62;
+    }
+    if (chr === "/") {
+        return 63;
+    }
+    // Throw exception; should not be hit in tests
+    return undefined;
 }
 
 function extractJSFromHTA(s) {
@@ -361,17 +361,17 @@ var __location = {
         return this._href;
     },
     set href(url) {
-	if (url) {
-	    url = "" + url;
-	    url = url.replace(/\r?\n/g, "");
-	    if (url.startsWith("file:")) return;
+        if (url) {
+            url = "" + url;
+            url = url.replace(/\r?\n/g, "");
+            if (url.startsWith("file:")) return;
             if (url.startsWith("//")) {
                 url = "https:" + url;
             }
             this._href = url;
             logIOC('HREF Location', {url}, "The script changed location.href.");
-	    logUrl('HREF Location', url);
-	}
+            logUrl('HREF Location', url);
+        }
     },
 
     /* 
@@ -442,7 +442,7 @@ var __location = {
 
     replace: function (url) {
         logIOC('Window Location', {url}, "The script changed the window location URL.");
-	logUrl('Window Location', url);
+        logUrl('Window Location', url);
     },
 
     // The location.reload() method reloads the current URL, like the Refresh button.
@@ -465,14 +465,14 @@ Object.defineProperty(Object.prototype, "__define", {
 });
 
 __define("location",
-       {
-	   get: function() { return __location; },
-	   set: function(url) {
-	       if (url) {
-		   __location.href = url;
-	       }
-	   },
-       });
+         {
+             get: function() { return __location; },
+             set: function(url) {
+                 if (url) {
+                     __location.href = url;
+                 }
+             },
+         });
 
 tagNameMap = {
     /* !! ADD TAG TO VALUE MAPPINGS HERE !! */
@@ -492,8 +492,8 @@ function __makeFakeElem(data) {
     };
     
     var fakeDict = {
-	// For debugging.
-	__name: "fakeDict",
+        // For debugging.
+        __name: "fakeDict",
         value : "",
         "contentDocument" : document,
         "appendChild" : func,
@@ -506,13 +506,13 @@ function __makeFakeElem(data) {
         "getElementsByTagName" : __getElementsByTagName,
         "title" : "My Fake Title",
         style: {},
-	src: fakeUrl,
+        src: fakeUrl,
         navigator: navigator,
         getAttribute: function() {
-	    return {
-		indexOf: function() { return -1; },
-	    };
-	},
+            return {
+                indexOf: function() { return -1; },
+            };
+        },
         setAttribute: function () {},
         addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
@@ -528,11 +528,11 @@ function __makeFakeElem(data) {
             add: function() {},
             remove: function() {},
             trigger: function() {},
-	    toggle: function() {},
+            toggle: function() {},
             special: {},
         },
         innerHTML: data,
-	_textContent: data,
+        _textContent: data,
         get textContent() {
             if (typeof(this._textContent) === "undefined") this._textContent = '';
             return this._textContent;
@@ -551,15 +551,15 @@ function __makeFakeElem(data) {
         get onclick() {
             return this._onclick;
         },
-	click: function() {},
+        click: function() {},
         removeChild: function() {return true;},
-	remove: function() {},
+        remove: function() {},
         append: function() {
             return __createElement("__append__");
         },
-	prepend: function() {
+        prepend: function() {
             return __createElement("__prepend__");
-        },	
+        },  
         cloneNode: func,
         getSelection: function () {},
         postMessage: function () {},
@@ -589,23 +589,23 @@ var __fakeParentElem = undefined;
 var dynamicOnclickHandlers = [];
 function __createElement(tag) {
     var fake_elem = {
-	    // For debugging.
-	    __name: "fake_elem",
-	    pause: function () {},
-	    play: function () {},
-	    dataset: lib.makeDefaultDict("???"),
+        // For debugging.
+        __name: "fake_elem",
+        pause: function () {},
+        play: function () {},
+        dataset: lib.makeDefaultDict("???"),
         pathname: '/and/i/have/a/path.php',
-	    checked: true,
-	    nodeType: 9,
+        checked: true,
+        nodeType: 9,
         set onload(func) {
-	        lib.info("Script set window.onload function.");
-	        func();
+            lib.info("Script set window.onload function.");
+            func();
         },
         "contentDocument" : document,
         contentWindow: {
             postMessage: function () {},
         },
-	    myType: "Element",
+        myType: "Element",
         set src(url) {
 
             // Looks like you can leave off the http from the url.
@@ -640,27 +640,27 @@ function __createElement(tag) {
             return this._href;
         },
         set href(url) {
-	        if (url) {
-		        url = url.replace(/\r?\n/g, "");
-		        this._href = url;
-		        logIOC('HREF Location', {url}, "The script changed location.href.");
-		        logUrl('HREF Location', url);
-	        }
+            if (url) {
+                url = url.replace(/\r?\n/g, "");
+                this._href = url;
+                logIOC('HREF Location', {url}, "The script changed location.href.");
+                logUrl('HREF Location', url);
+            }
         },
         // Not ideal or close to correct, but sometimes needs a parentNode field.
         parentNode: __fakeParentElem,
         log: [],
-	    style: {
-	        setProperty: function() {},
+        style: {
+            setProperty: function() {},
             display: "",
-	    },
-	    appendChild: function() {
+        },
+        appendChild: function() {
             return __createElement("__append__");
         },
         append: function() {
             return __createElement("__append__");
         },
-	    prepend: function() {
+        prepend: function() {
             return __createElement("__prepend__");
         },
         attributes: {
@@ -673,7 +673,7 @@ function __createElement(tag) {
             if ((name === "src") || (name === "href")) {
                 if (val.startsWith("//")) val = "https:" + val;
                 logIOC('Element Source', {val}, "The script set the src or href field of an element.");
-	            logUrl('Element Source', val);
+                logUrl('Element Source', val);
             }
         },
         setAttributeNode: function(name, val) {
@@ -700,9 +700,9 @@ function __createElement(tag) {
         lastChild: {
             nodeType: 3,
         },
-	    sandbox: {
-	        add: function() {},
-	    },
+        sandbox: {
+            add: function() {},
+        },
         getElementsByTagName: __getElementsByTagName,
         getElementsByClassName: __getElementsByTagName,
         // Probably wrong, fix this if it causes problems.
@@ -715,13 +715,13 @@ function __createElement(tag) {
         select: function() {
             __currSelectedVal = this.val;
         },
-	    setSelectionRange: function() {
-	        // Do we have an element value that might get selected?
-	        if (typeof(this.attributes["value"]) !== "undefined") {
-		        this.val = this.attributes["value"];
-		        __currSelectedVal = this.val;
-	        }	    
-	    },
+        setSelectionRange: function() {
+            // Do we have an element value that might get selected?
+            if (typeof(this.attributes["value"]) !== "undefined") {
+                this.val = this.attributes["value"];
+                __currSelectedVal = this.val;
+            }       
+        },
         cloneNode: function() {
             //// Actually clone the element (deep copy).
             //return JSON.parse(JSON.stringify(this));
@@ -791,13 +791,13 @@ function __createElement(tag) {
         removeEventListener: function(tag) {
             logIOC("Element.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },        
-	    removeChild: function() {return true;},
-	    remove: function() {},
+        removeChild: function() {return true;},
+        remove: function() {},
         "classList" : {
             add: function() {},
             remove: function() {},
             trigger: function() {},
-	        toggle: function() {},
+            toggle: function() {},
             // Trivial stubbing. Just say nothing is in the class
             // list. May need a flag to control this.
             contains: function(x) { return false; },
@@ -809,7 +809,7 @@ function __createElement(tag) {
         isVisible: function() { return true; },
         content: '',
         _textContent: '',
-	innerText: '',
+        innerText: '',
         get textContent() {
             if (typeof(this._textContent) === "undefined") this._textContent = '';
             return this._textContent;
@@ -844,7 +844,7 @@ const __stubbed_then = {
     __name: "__stubbed_then",
     then: function(f) {
         try {
-	    f("fake");
+            f("fake");
         }
         catch (e) {
             lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
@@ -874,8 +874,8 @@ const navigator = {
     clipboard: {
         writeText : function(txt) {
             logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
-	    __currClipboardData = txt;
-	    return __stubbed_then;
+            __currClipboardData = txt;
+            return __stubbed_then;
         },
     },
     connection: {
@@ -951,7 +951,7 @@ const navigator = {
     },
     sendBeacon : function (url) {
         logIOC('navigator.sendBeacon()', {url}, "The script called navigator.sendBeacon() with a URL.");
-	logUrl('navigator.sendBeacon()', url);
+        logUrl('navigator.sendBeacon()', url);
     },
 };
 
@@ -969,8 +969,8 @@ var _generic_append_func = function(content) {
 // Stubbed NodeIterator object that does nothing.
 function _getNodeIterator (root) {
     const r = {
-	root: root,
-	nextNode: function() { return null; },
+        root: root,
+        nextNode: function() { return null; },
     };
     return r;
 }
@@ -1007,11 +1007,11 @@ var document = {
     location: location,
     readyState: "complete",
     classList: {
-	add: function() {},
-	remove: function() {},
-	trigger: function() {},
-	toggle: function() {},
-	special: {},
+        add: function() {},
+        remove: function() {},
+        trigger: function() {},
+        toggle: function() {},
+        special: {},
     },
     head: {
         innerHTML: "",
@@ -1038,9 +1038,9 @@ var document = {
         return this._onmousemove;
     },    
     defaultView: {
-	history: history,
-	location: __location,
-	addEventListener: function(tag, func) {
+        history: history,
+        location: __location,
+        addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
             // Simulate the event happing by running the function.
             logIOC("document.defaultView..addEventListener()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
@@ -1068,14 +1068,14 @@ var document = {
     execCommand : function(cmd) {
         if ((cmd == "copy") && (typeof(__currSelectedVal) !== "undefined")) {
             logIOC('Clipboard', __currSelectedVal, "The script pasted text into the clipboard.");
-	    __currClipboardData = __currSelectedVal;
+            __currClipboardData = __currSelectedVal;
         }
     },
     getElementById : function(id) {
 
-	// Normalize ID.
-	if (id.startsWith(".")) id = id.slice(1);
-	
+        // Normalize ID.
+        if (id.startsWith(".")) id = id.slice(1);
+        
         // Already looked this up?
         if (typeof(this.elementCache[id]) !== "undefined") return this.elementCache[id];
         
@@ -1091,7 +1091,7 @@ var document = {
         
         if (typeof(ids) != "undefined") {
 
-	    // Look for it in ID map.
+            // Look for it in ID map.
             for (var i = 0; i < ids.length; i++) {
                 if (char_codes_to_string(ids[i]) == id) {
                     var r = __createElement(id);
@@ -1109,14 +1109,14 @@ var document = {
             }
 
             // Maybe just tracked as attr?
-	    for (var i = 0; i < attrs.length; i++) {
-		if ((attrs[i].class === id) || ((attrs[i].id === id))) {
+            for (var i = 0; i < attrs.length; i++) {
+                if ((attrs[i].class === id) || ((attrs[i].id === id))) {
                     var r = __createElement(id);
                     r.value = attrs[i].value;
                     if ((typeof(r.value) == "undefined") || (r.value == "")) r.value = "legituser@mylegitdomain.com";
-		    return r;
-		}
-	    }
+                    return r;
+                }
+            }
             
         }
 
@@ -1127,7 +1127,7 @@ var document = {
         var r = __createElement(id);
         r.val = jqueryVals[id];
         if (typeof(r.val) == "undefined") r.val = "legituser@mylegitdomain.com";
-	r.prepend = function() {};
+        r.prepend = function() {};
         generatedElements[id] = r;
         return r;
     },
@@ -1138,13 +1138,13 @@ var document = {
     documentElement: {
         style: {},
         className: "",
-	classList: {
-	    add: function() {},
-	    remove: function() {},
-	    trigger: function() {},
-	    toggle: function() {},
-	    special: {},
-	},
+        classList: {
+            add: function() {},
+            remove: function() {},
+            trigger: function() {},
+            toggle: function() {},
+            special: {},
+        },
     },
     write: function (content) {
         logIOC('DOM Write', {content}, 'The script wrote to the DOM')
@@ -1170,7 +1170,7 @@ var document = {
         eval(extractJSFromHTA(content));
     },
     insertBefore: function(node) {
-	logIOC('DOM Insert', {node}, "The script inserted an HTML node on the DOM")
+        logIOC('DOM Insert', {node}, "The script inserted an HTML node on the DOM")
         eval(extractJSFromHTA(node));
     },
     getElementsByTagName: __getElementsByTagName,
@@ -1198,15 +1198,15 @@ var document = {
     },
     querySelector: function(selectors) {
         logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
-	return document.getElementById(selectors);
+        return document.getElementById(selectors);
     },
     querySelectorAll: function(selectors) {
         logIOC('Document.querySelector()', {selectors}, "The script queried the DOM for selectors '" + selectors + "' .");
-	return [document.getElementById(selectors)];
+        return [document.getElementById(selectors)];
     },    
     keypress: function() {},
     createNodeIterator: function(root) {
-	return _getNodeIterator(root);
+        return _getNodeIterator(root);
     },
     currentScript: __makeFakeElem(""),
     open: function() {
@@ -1214,10 +1214,13 @@ var document = {
     },
     close: function() {},
     on: function(event, func) {
-	func(dummyEvent);
+        func(dummyEvent);
     },
     getSelection: function () {},
     postMessage: function () {},
+    currentScript: {
+        src: "mylegitdomain.com",
+    },
 };
 document.documentElement = document;
 const fixit = document;
@@ -1230,23 +1233,26 @@ class URL {
     
     constructor(url, base="") {
         if (typeof(url) == "undefined") url = "???";
-	this.url = url + base;
+        url = "" + url;
+        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://" + url;
+        this.url = url + base;
         this.hostname = "???";
-	this.pathname = '/and/i/have/a/path.php';
+        this.pathname = '/and/i/have/a/path.php';
         const startHost = this.url.indexOf("://");
         if (startHost >= 0) {
             this.hostname = this.url.slice(startHost + 3);
-	    this.pathname = this.hostname;
+            this.pathname = this.hostname;
             const endHost = this.hostname.indexOf("/");
             if (endHost >= 0) {
                 this.hostname = this.hostname.slice(0, endHost);
             }
         }
-	this.searchParams = {
-	    set : function() {},
-	};
-	
-	lib.logIOC("URL()", {method: "URL()", url: this.url}, "The script created a URL object.");
+        this.searchParams = {
+            set : function() {},
+        };
+        this.origin = this.hostname;
+        
+        lib.logIOC("URL()", {method: "URL()", url: this.url}, "The script created a URL object.");
         lib.logUrl("URL()", this.url);
     };
 
@@ -1254,14 +1260,14 @@ class URL {
     
     static createObjectURL(urlObject) {
 
-	// If we have a Blob this is probably creating a file download
-	// link. Save the "file".
-	if (urlObject.constructor.name == "Blob") {
-	    const fname = "URL_Blob_file_" + URL._blobCount++;
-	    const uuid = lib.getUUID();
-	    lib.writeFile(fname, urlObject.data);
-	    lib.logResource(uuid, fname, urlObject.data);
-	}
+        // If we have a Blob this is probably creating a file download
+        // link. Save the "file".
+        if (urlObject.constructor.name == "Blob") {
+            const fname = "URL_Blob_file_" + URL._blobCount++;
+            const uuid = lib.getUUID();
+            lib.writeFile(fname, urlObject.data);
+            lib.logResource(uuid, fname, urlObject.data);
+        }
     };
 
     static revokeObjectURL() {};
@@ -1334,11 +1340,11 @@ class XMLHttpRequest {
     
     open(method, url) {
         this.method = method;
-	// Maybe you can skip the http part of the URL and XMLHTTP
-	// still handles it?
-	if (url.startsWith("//")) {
-	    url = "http:" + url;
-	}
+        // Maybe you can skip the http part of the URL and XMLHTTP
+        // still handles it?
+        if (url.startsWith("//")) {
+            url = "http:" + url;
+        }
         this.url = url;
         lib.logIOC("XMLHttpRequest", {method: method, url: url}, "The script opened a HTTP request.");
         lib.logUrl("XMLHttpRequest", url);
@@ -1358,13 +1364,13 @@ class dummyClass {};
 // Stubbed intl-tel-input constructor (https://github.com/jackocnr/intl-tel-input).
 _intlTelInput = function () {
     return {
-	getSelectedCountryData: function () {
-	    return {
-		iso2: "jp",
-		dialCode: "+54",
-	    };
-	},
-	
+        getSelectedCountryData: function () {
+            return {
+                iso2: "jp",
+                dialCode: "+54",
+            };
+        },
+        
     };
 };
 
@@ -1372,10 +1378,10 @@ _intlTelInput = function () {
 function makeWindowObject() {
     var window = {
 
-	// For debugging.
-	__name: "window",
+        // For debugging.
+        __name: "window",
 
-	HTMLIFrameElement: dummyClass,
+        HTMLIFrameElement: dummyClass,
         get park() {
             if (typeof(this._park) === "undefined") this._park = '???';
             return this._park;
@@ -1383,11 +1389,11 @@ function makeWindowObject() {
         set park(val) {
             logIOC('Window Parking', val, "The script changed window.park.");
         },        
-	// Guess you can create ActiveX objects with a window method.
-	ActiveXObject: function(objName) {
-	    return ActiveXObject(objName);
-	},
-	blur: function() {},
+        // Guess you can create ActiveX objects with a window method.
+        ActiveXObject: function(objName) {
+            return ActiveXObject(objName);
+        },
+        blur: function() {},
         setInterval: function() {},
         clearInterval: function() {},
         encodeURIComponent: function(s) {
@@ -1397,7 +1403,7 @@ function makeWindowObject() {
         execScript: function(cmd) {
             lib.runShellCommand(cmd);
         },
-	btoa: btoa,
+        btoa: btoa,
         // Don't know what this is, referenced in some phishing JS.
         svne: "??",
         resizeTo: function(a,b){},
@@ -1405,7 +1411,7 @@ function makeWindowObject() {
         open: function(url) {
             if ((typeof(url) == "string") && (url.length > 0)){
                 logIOC('window.open()', {url}, "The script loaded a resource.");
-		logUrl('window.open()', url);
+                logUrl('window.open()', url);
             }
         },
         on: function(trigger, func) {
@@ -1421,7 +1427,7 @@ function makeWindowObject() {
         },
         setTimeout: function(f, i) {
             f();
-	},
+        },
         Date: Date,
         addEventListener: function(tag, func) {
             if (typeof(func) === "undefined") return;
@@ -1434,10 +1440,10 @@ function makeWindowObject() {
             logIOC("Window.removeEventListener()", {event: tag}, "The script removed an event listener for the '" + tag + "' event.");
         },
         attachEvent: function(tag, func) {
-	    logIOC("Window.attachEvent()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
+            logIOC("Window.attachEvent()", {event: tag}, "The script added an event listener for the '" + tag + "' event.");
             func(dummyEvent);
             listenerCallbacks.push(func);
-	},
+        },
         getComputedStyle: function(){
             return {
                 getPropertyValue: function() { return "none"; },
@@ -1476,38 +1482,39 @@ function makeWindowObject() {
             constructor() {};    
         },
         URL: URL,
+        currentServer: "mylegitdomain.com",
         decodeURIComponent: decodeURIComponent,
         set onload(func) {
-	    lib.info("Script set window.onload function.");
-	    func();
+            lib.info("Script set window.onload function.");
+            func();
         },
         get MAIL_URL() {
             if (typeof(this._MAIL_URL) === "undefined") this._href = fakeUrl;
             return this._MAIL_URL;
         },
         set MAIL_URL(url) {
-	    // Could be base64.
-	    if (atob(url)) url = atob(url);
-	    this._MAIL_URL = url;
-	    logIOC('MAIL_URL Location', {url}, "The script changed window.MAIL_URL.");
-	    logUrl('MAIL_URL Location', url);
+            // Could be base64.
+            if (atob(url)) url = atob(url);
+            this._MAIL_URL = url;
+            logIOC('MAIL_URL Location', {url}, "The script changed window.MAIL_URL.");
+            logUrl('MAIL_URL Location', url);
         },
         XMLHttpRequest: XMLHttpRequest,
-	clipboardData: {
-	    getData: function() {
-		return __currClipboardData;
-	    },
+        clipboardData: {
+            getData: function() {
+                return __currClipboardData;
+            },
             setData: function (typ, txt) {
                 logIOC('Clipboard', txt, "The script pasted text into the clipboard.");
-	        __currClipboardData = txt;
-	        return __stubbed_then;
+                __currClipboardData = txt;
+                return __stubbed_then;
             },
-	},
+        },
         frames: [],
         crypto: nodeCrypto,
         getSelection: function () {},
-	postMessage: function () {},
-	parseFloat: parseFloat,
+        postMessage: function () {},
+        parseFloat: parseFloat,
     };
 
     return window;
@@ -1528,7 +1535,7 @@ const _localStorage = {
         // Can access localStorage with a URL (does not seem local but whatever).
         if (x.startsWith("http://") || x.startsWith("https://")) {
             logIOC('localStorage', {x}, "The script accessed a URL with localStorage.getItem().");
-	    logUrl('localStorage', x);
+            logUrl('localStorage', x);
         }
         return null
     },
@@ -1587,9 +1594,9 @@ function adjustIframes() {};
 function serialize() { return '"nope"'; };
 function find() {
     return {
-	is: function() { return false; },
-	val: function() {},
-	prop: function() {},
+        is: function() { return false; },
+        val: function() {},
+        prop: function() {},
     }
 };
 
@@ -1598,16 +1605,16 @@ var funcDict = {
     // For debugging.
     __name: "funcDict",
     on: function(arg1, arg2) {
-	if (typeof(arg2) == "function") {
-	    arg2(dummyEvent);
-	};
-	return funcDict;
+        if (typeof(arg2) == "function") {
+            arg2(dummyEvent);
+        };
+        return funcDict;
     },
     serialize: serialize,
     find: find,
     val: function() { return "some@emailaddr.moe" },
     click: function(f) {
-	f(dummyEvent);
+        f(dummyEvent);
     },
     scroll: function() {},
     modal: function() {},
@@ -1832,7 +1839,7 @@ function setTimeout(func, time) {
     const funcStr = ("" + func);
     if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
     if (timeoutFuncs[funcStr] > 300) {
-	console.log(funcStr);
+        console.log(funcStr);
         console.log("Recursive setTimeout() loop detected. Breaking loop.")
         return func;
     }
@@ -1858,8 +1865,8 @@ function fetch(url, data) {
     lib.logIOC("fetch", {url: url, data: data}, "The script fetch()ed a URL.");
     lib.logUrl("fetch", url);
     const r = {
-	ok : true,
-	json : function() { return "1"; },
+        ok : true,
+        json : function() { return "1"; },
     };
     const p = new Promise((resolve, reject) => {
         resolve(r);
@@ -1962,9 +1969,9 @@ const chrome = {
         },
         setUninstallURL: function (url) {
             logIOC('chrome.runtime.setUninstallURL', {url}, "The script set the uninstall URL for an extension.");
-	    logUrl('chrome.runtime.setUninstallURL', url);
+            logUrl('chrome.runtime.setUninstallURL', url);
         },
-	id : "abcdefghijklmnopabcdefghijklmnop",
+        id : "abcdefghijklmnopabcdefghijklmnop",
     },
 
     tabs: {
@@ -2047,10 +2054,10 @@ var randomCount = 0;
 Math.random = function() {
     randomCount++;
     if (randomCount < 10) {
-	logIOC('Math.random', {}, "Script called Math.random().");
+        logIOC('Math.random', {}, "Script called Math.random().");
     }
     else {
-	randomCount = 11;
+        randomCount = 11;
     }
     const r = randVal;
     randVal += 0.1;
@@ -2093,8 +2100,8 @@ function jwplayer(arg) {
         
         // Return a fake JWPlayer object.
         return {
-	    // For debugging.
-	    __name: "jwplayer1",
+            // For debugging.
+            __name: "jwplayer1",
             setup: function() {},
             on: function(event, func) {
                 func();
@@ -2105,8 +2112,8 @@ function jwplayer(arg) {
 
     // Maybe static methods?
     return {
-	// For debugging.
-	__name: "jwplayer2",
+        // For debugging.
+        __name: "jwplayer2",
         getPosition: function () {
             return 100.0;
         },
@@ -2204,29 +2211,29 @@ var process = {
     __name: "process",
     argv: ["arg1", "arg2"],
     exit: function (code) {
-	logIOC('process exit()', {code}, "The script called process.exit().");
+        logIOC('process exit()', {code}, "The script called process.exit().");
     },
     on: function (signal, handler) {
         handler();
     },
     hrtime: {
-	bigint: function () {
-	    _fakeHrtime += 1000n;
-	    return _fakeHrtime;
-	},
+        bigint: function () {
+            _fakeHrtime += 1000n;
+            return _fakeHrtime;
+        },
     },
     versions: {
-	node: "22.0.3",
+        node: "22.0.3",
     },
     env: {
     },
 }
-    
+
 // Stubbed Node spawn() function.
 function _spawn(file, args) {
     logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
     return {
-	unref: function () {},
+        unref: function () {},
     };
 }
 
@@ -2234,7 +2241,7 @@ function _spawn(file, args) {
 function _fork(file, args) {
     logIOC('process fork()', {file: file, args: args}, "The script spawned a process with fork().");
     return {
-	unref: function () {},
+        unref: function () {},
     };
 }
 
@@ -2287,14 +2294,14 @@ function _Socket() {};
 // Stubbed Node net function. See require_override.js.
 function _createServer() {
     return {
-	listen: function () {},
-	on: function () {},
-	close: function () {},
-	address: function () {
-	    return {
-		port: 80,
-	    }
-	},
+        listen: function () {},
+        on: function () {},
+        close: function () {},
+        address: function () {
+            return {
+                port: 80,
+            }
+        },
     };
 };
 
@@ -2304,33 +2311,33 @@ var _http = {
     __name: "_http",
     request: function (url, options) {
 
-	// Is this a request(url, options) call or a request(options) call?
-	if (typeof url !== "string") {
+        // Is this a request(url, options) call or a request(options) call?
+        if (typeof url !== "string") {
 
-	    // See if host, path, etc. are in the 1st arg
-	    // (request(options) call).
-	    if (typeof url.hostname === "undefined") return;
-	    const host = url.hostname;
-	    var path = "";
-	    if (typeof url.path !== "undefined") {
-		path = url.path;
-	    }
-	    var port = "";
-	    if (typeof url.port !== "undefined") {
-		port = ":" + url.port;
-	    }
+            // See if host, path, etc. are in the 1st arg
+            // (request(options) call).
+            if (typeof url.hostname === "undefined") return;
+            const host = url.hostname;
+            var path = "";
+            if (typeof url.path !== "undefined") {
+                path = url.path;
+            }
+            var port = "";
+            if (typeof url.port !== "undefined") {
+                port = ":" + url.port;
+            }
 
-	    // Construct the URL based on the options.
-	    options = url;
-	    url = "http://" + host + port + path;
-	}
-	logIOC('http.request()', {url: url, options: options}, "The script made a web request with http.request().");
-	lib.logUrl('http.request()', url);
-	throw("Fake error");
+            // Construct the URL based on the options.
+            options = url;
+            url = "http://" + host + port + path;
+        }
+        logIOC('http.request()', {url: url, options: options}, "The script made a web request with http.request().");
+        lib.logUrl('http.request()', url);
+        throw("Fake error");
     },
     get: function(url, headers) {
         logIOC('http.get()', {url: url, headers: headers}, "The script made a web request with http.get().");
-	lib.logUrl('http.get()', url);
+        lib.logUrl('http.get()', url);
         return __stubbed_on;
     },
 };
@@ -2411,7 +2418,7 @@ _W = {
         // For tracking treat domain as a URL.
         const url = "https://" + domain;
         logIOC('_W.securePrefix', {url}, "The script set _W.securePrefix (Weebly?).");
-	logUrl('_W.securePrefix', url);
+        logUrl('_W.securePrefix', url);
         this._securePrefix = domain;
     },
     get securePrefix() {
@@ -2425,14 +2432,14 @@ var external = {
     // For debugging.
     __name: "external",
     Document: {
-	ScopeNamespace: {
-	    GetRoot: function() {},
-	    GetChild: function() {},
-	    GetNext: function() {},
-	},
-	ActiveView: {
-	    ControlObject: ActiveXObject("dom"),
-	},
+        ScopeNamespace: {
+            GetRoot: function() {},
+            GetChild: function() {},
+            GetNext: function() {},
+        },
+        ActiveView: {
+            ControlObject: ActiveXObject("dom"),
+        },
     }
 };
 
@@ -2441,15 +2448,15 @@ const crypto = {
     // For debugging.
     __name: "crypto",
     getRandomValues : function(arr) {
-	// Not random so runs are deterministic.
-	var r = [];
-	for (let i = 0; i < arr.length; i++) {
-	    r.push(i);
-	}
-	return r;
+        // Not random so runs are deterministic.
+        var r = [];
+        for (let i = 0; i < arr.length; i++) {
+            r.push(i);
+        }
+        return r;
     },
     createDecipheriv: function(a1, a2, a3, a4) {
-	return fullCrypto.createDecipheriv(a1, a2, a3, a4);
+        return fullCrypto.createDecipheriv(a1, a2, a3, a4);
     },
     randomUUID: function() {
         // We want determistic analysis runs, so return a fixed UUID.
@@ -2549,23 +2556,23 @@ turnstile = {
 // Google debug (I think?) object.
 google = {
     script : {
-	init : function(content) {
-	    logIOC('google.script.init()', {content}, 'The script loaded HTML via google.script.init()')
-	    try {
-		loadedInfo = JSON.parse(content);
-		if (typeof(loadedInfo.userHtml) !== "undefined") {
-		    content = html = loadedInfo.userHtml;
-		    logIOC("DOM Write", {content}, "The script added a HTML node to the DOM");
-		    const urls = pullActionUrls(html);
-		    if (typeof(urls) !== "undefined") {
-			for (const url of urls) {
-			    logUrl('Action Attribute', url);
-			};
-		    }
-		}
-	    }
-	    catch (e) { };
-	},
+        init : function(content) {
+            logIOC('google.script.init()', {content}, 'The script loaded HTML via google.script.init()')
+            try {
+                loadedInfo = JSON.parse(content);
+                if (typeof(loadedInfo.userHtml) !== "undefined") {
+                    content = html = loadedInfo.userHtml;
+                    logIOC("DOM Write", {content}, "The script added a HTML node to the DOM");
+                    const urls = pullActionUrls(html);
+                    if (typeof(urls) !== "undefined") {
+                        for (const url of urls) {
+                            logUrl('Action Attribute', url);
+                        };
+                    }
+                }
+            }
+            catch (e) { };
+        },
     }
 };
 goog = google;
@@ -2591,7 +2598,7 @@ class AbortController {
 
 // Stubbed AbortSignal.
 var AbortSignal = {
-    timeout : function () { },	
+    timeout : function () { },  
 };
 
 // Global module dict?
@@ -2606,15 +2613,15 @@ function _router() {
 
     // Return a stubbed express.Router object.
     r = {
-	__name: "_router()",
-	get : function(url) {
-	    logIOC('express.Router.get()', {url}, "The script made a GET request with express.Router.get().");
-	    logUrl('express.Router.get()', url);
-	},
-	post : function(url) {
-	    logIOC('express.Router.post()', {url}, "The script made a POST request with express.Router.post().");
-	    logUrl('express.Router.post()', url);
-	},
+        __name: "_router()",
+        get : function(url) {
+            logIOC('express.Router.get()', {url}, "The script made a GET request with express.Router.get().");
+            logUrl('express.Router.get()', url);
+        },
+        post : function(url) {
+            logIOC('express.Router.post()', {url}, "The script made a POST request with express.Router.post().");
+            logUrl('express.Router.post()', url);
+        },
     };
     return r;
 }
@@ -2622,10 +2629,10 @@ function _router() {
 // Stubbed bootstrap package.
 bootstrap = {
     Modal: function () {
-	return {
-	    show: function() {},
-	    hide: function() {},
-	};
+        return {
+            show: function() {},
+            hide: function() {},
+        };
     },
 };
 
@@ -2656,10 +2663,10 @@ function _existsSync(path) {
 function _statSync(fname) {
     // Lie about the stats.
     return {
-	    size : 1234,
-	    mtime : {
-	        toISOString : function () { return "??"; },
-	    },
+        size : 1234,
+        mtime : {
+            toISOString : function () { return "??"; },
+        },
     };
 }
 
