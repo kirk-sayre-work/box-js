@@ -4,6 +4,7 @@ const nodeCrypto = require('crypto').webcrypto;
 const fullCrypto = require('crypto')
 const nodeUtil = require('util');
 const { Buffer } = require('node:buffer');
+const LocalTextDecoder = require("./local_text_decoder.js");
 
 // Save event listener functions. Event listener callbacks may change
 // the state of the DOM and exhibit different functionality when
@@ -1767,7 +1768,17 @@ window.jQuery = jQuery
 
 // TextEncoder support.
 const TextEncoder = nodeUtil.TextEncoder;
-const TextDecoder = nodeUtil.TextDecoder;
+const _TextDecoder = nodeUtil.TextDecoder;
+class TextDecoder {
+
+    constructor() {
+        this._decoder = new _TextDecoder();
+    };
+
+    decode(data) {
+        return LocalTextDecoder.decode(data);
+    };
+}
 
 // Initial WebPack stubbing.
 globalThis.location = location;
@@ -2144,7 +2155,7 @@ class DOMParser {
     
     parseFromString(content) {
         logIOC("DOMParser", {content}, "DOMParser.parseFromString() called.");
-
+        
         // Pull action attribute URLs.
         const urls = pullActionUrls(content);
         if (typeof(urls) !== "undefined") {
