@@ -148,10 +148,10 @@ class Blob {
                 }
             }
         }
-        if (!flat.some(i => (!Number.isInteger(i) || (i < 0) || (i > 255)))) {
-            for (let i = 0; i < flat.length; i++) {
-                this.data += String.fromCharCode(flat[i]);
-            };
+        //if (!flat.some(i => (!Number.isInteger(i) || (i < 0) || (i > 255)))) {
+        for (let i = 0; i < flat.length; i++) {
+            if (!Number.isInteger(flat[i]) || (flat[i] < 0) || (flat[i] > 255)) continue;
+            this.data += String.fromCharCode(flat[i]);
         };
     };
 
