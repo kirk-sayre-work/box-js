@@ -40,6 +40,18 @@ function require(arg) {
 	    existsSync : _existsSync,
 	    statSync : _statSync,
 	},
+        "os" : {
+            hostname: _NODE_os_hostname,
+            userInfo: _NODE_os_userInfo,
+            platform: _NODE_os_platform,
+            arch: _NODE_os_arch,
+            totalmem: _NODE_os_totalmem,
+            cpus: _NODE_os_cpus,
+            uptime: _NODE_os_uptime,
+            userInfo: _NODE_os_userInfo,
+            hostname: _NODE_os_hostname,
+            networkInterfaces: _NODE_os_networkInterfaces,
+        }
     }
     if (typeof overrides[arg] !== "undefined") return overrides[arg];
     try {

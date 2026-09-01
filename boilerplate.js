@@ -2398,6 +2398,87 @@ function _machineIdSync() {
 // Fake value for Node __dirname global variable.
 var __dirname = "C:/Users/legituser/Downloads"
 
+// Stubbed Node os functions/fields.
+function _NODE_os_hostname() {
+    return "mylegitdomain";
+};
+
+function _NODE_os_userInfo() {
+    return { uid: -1,
+             gid: -1,
+             username: 'legituser',
+             homedir: 'C:\\Users\\legituser',
+             shell: null
+           };
+};
+
+function _NODE_os_platform() {
+    return "win32";
+};
+
+function _NODE_os_arch() {
+    return "x64";
+};
+
+function _NODE_os_totalmem() {
+    return (4026531840 * 4);
+};
+
+function _NODE_os_cpus() {
+    return ["??", "??", "??", "??"];
+};
+
+function _NODE_os_uptime() {
+    return 1296193
+};
+
+function _NODE_os_networkInterfaces() {
+    return {
+        "lo": [
+            {
+                "address": "127.0.0.1",
+                "netmask": "255.0.0.0",
+                "family": "IPv4",
+                "mac": "00:00:00:00:00:00",
+                "internal": true,
+                "cidr": "127.0.0.1/8"
+            },
+            {
+                "address": "::1",
+                "netmask": "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+                "family": "IPv6",
+                "mac": "00:00:00:00:00:00",
+                "scopeid": 0,
+                "internal": true,
+                "cidr": "::1/128"
+            }
+        ],
+        "eth0": [
+            {
+                "address": "134.44.72.123",
+                "netmask": "255.255.255.0",
+                "family": "IPv4",
+                "mac": "01:04:13:b1:0d:f1",
+                "internal": false,
+                "cidr": "134.44.72.123/24"
+            },
+            {
+                "address": "ae81::f02:25f0:e142:46b1",
+                "netmask": "ffff:ffff:ffff:ffff::",
+                "family": "IPv6",
+                "mac": "01:04:13:b1:0d:f1",
+                "scopeid": 1,
+                "internal": false,
+                "cidr": "ae81::f02:25f0:e142:46b1/64"
+            }
+        ]
+    }
+};
+
+// **********
+// End Stubbed Node-JS functions.
+// **********
+
 // Stubbed Components object.
 const _fakeComponentClass = {
     // For debugging.
