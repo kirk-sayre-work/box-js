@@ -1099,7 +1099,9 @@ var document = {
                     r.innerHTML = char_codes_to_string(data[i]);
                     r.innerText = char_codes_to_string(data[i]);
                     r.getAttribute = function(attrId) {
-                        return this.attrs[attrId];
+                        var r = this.attrs[attrId];
+                        if (!r) r = this.attrs[attrId.toLowerCase()];
+                        return r;
                     };
                     r.attrs = attrs[i];
                     this.elementCache[id] = r;
