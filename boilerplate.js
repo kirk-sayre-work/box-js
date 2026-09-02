@@ -2254,7 +2254,16 @@ var process = {
 function _spawn(file, args) {
     logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
     return {
+        __name: "_spawn",
         unref: function () {},
+        kill: function () {},
+        on: function() {},
+        stderr: {
+            on: function() {},
+        },
+        stdout: {
+            on: function() {},
+        },
     };
 }
 
