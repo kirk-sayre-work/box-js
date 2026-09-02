@@ -1148,6 +1148,12 @@ var document = {
             toggle: function() {},
             special: {},
         },
+        getAttribute: function () {
+            return "??";
+        },
+    },
+    getAttribute: function () {
+        return "??";
     },
     write: function (content) {
         logIOC('DOM Write', {content}, 'The script wrote to the DOM')
