@@ -118,6 +118,21 @@
             "description": "Do not rewrite the source code at all, other than for `@cc_on` support"
         },
         {
+            "name": "harrington",
+            "type": "Boolean",
+            "description": "After emulation, run every recorded execution IOC through Harrington (the Rust batch/PowerShell deobfuscator) to recover second-stage commands and URLs. Writes harrington.json and merges recovered URLs into urls.json."
+        },
+        {
+            "name": "harrington-bin",
+            "type": "String",
+            "description": "Path to the harrington/batdeob binary (default: $HARRINGTON_BIN, else the first of batdeob/harrington on PATH)."
+        },
+        {
+            "name": "harrington-timeout",
+            "type": "Number",
+            "description": "Per-command Harrington analysis timeout in seconds (default 10). Runs after emulation, so it does not share the --timeout budget."
+        },
+        {
             "name": "rewrite-max-size",
             "type": "Number",
             "description": "Skip AST rewriting and uglify preprocessing for samples larger than this many bytes (default 1000000). Rewriting a multi-MB sample can consume the entire --timeout budget before emulation starts."
