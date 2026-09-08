@@ -6,6 +6,7 @@
         "acorn": ">=8.8.0",
         "columnify": "*",
         "command-line-args": "^4.0.7",
+        "cross-blob": "^3.0.2",
         "escodegen": "^2.1.0",
         "global": "^4.4.0",
         "iconv-lite": "^0.4.23",

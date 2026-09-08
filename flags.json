@@ -118,6 +118,11 @@
             "description": "Do not rewrite the source code at all, other than for `@cc_on` support"
         },
         {
+            "name": "rewrite-max-size",
+            "type": "Number",
+            "description": "Skip AST rewriting and uglify preprocessing for samples larger than this many bytes (default 1000000). Rewriting a multi-MB sample can consume the entire --timeout budget before emulation starts."
+        },
+        {
             "name": "no-catch-rewrite",
             "type": "Boolean",
             "description": "Do not rewrite try..catch clauses to make the exception global-scoped"
@@ -137,11 +142,11 @@
             "type": "Boolean",
             "description": "Return `false` for Scripting.FileSystemObject.FileExists(x)"
         },
-	{
+        {
             "name": "limit-file-checks",
             "type": "Boolean",
             "description": "Switch default value for folder/file exists checks if many checks are performed (try to break infinite file check loops)."
-        },	
+        },
         {
             "name": "no-folder-exists",
             "type": "Boolean",
@@ -241,18 +246,29 @@
             "name": "decode-uri-as-ioc",
             "type": "Boolean",
             "description": "Log Unique decodeURI results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
-        },	
-	{
+        },
+        {
+            "name": "ignore-returns",
+            "type": "Boolean",
+            "description": "Ignore return statements with no values (just used for control flow) and continue execution."
+        },
+        {
             "name": "ignore-rewrite-errors",
             "type": "Boolean",
             "description": "Analyze original sample if any sample rewrites fail."
         },
-	{
+        {
             "name": "use-old-date",
             "type": "Boolean",
             "description": "Lie about the current date/time and return an old date."
         },
-	{
+        {
+            "name": "dump-vars",
+            "alias": "d",
+            "type": "Boolean",
+            "description": "Look at all defined variables in script and dump interesting variable values to files for later analysis."
+        },
+        {
             "name": "check",
             "alias": "c",
             "type": "Boolean",

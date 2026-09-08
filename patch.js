@@ -158,6 +158,20 @@ Date = function () {
     arguments = [2017, 3, 6];
   }
   var proxiedDate = new legacyDate(...arguments);
+
+  /* vm2 3.10+ removes Proxy from the sandbox. Without a fallback every
+   * `new Date()` throws "Proxy is not a constructor", which kills the
+   * emulation of essentially every sample. Degrade to a plain Date
+   * advanced by the same offset so time still moves forward.
+   */
+  if (typeof Proxy !== "function") {
+    if (typeof proxiedDate._myOffset == "undefined") {
+      proxiedDate._myOffset = _globalTimeOffset;
+      _globalTimeOffset += 100;
+    }
+    return new legacyDate(proxiedDate.getTime() + proxiedDate._myOffset);
+  }
+
   return new Proxy(
     {
       _actualTime: proxiedDate,
@@ -349,6 +363,7 @@ constructor.prototype.bind = function (context, func) {
   };
   return r;
 };
+Function.constructor.prototype.bind = constructor.prototype.bind;
 
 // Fake version of require() to fake importing some packages.
 /*

@@ -89,6 +89,7 @@ function kill(message) {
 }
 
 function log(tag, text, toFile = true, toStdout = true) {
+  if (argv["check"]) return;
   const levels = {
     debug: 0,
     verb: 1,
@@ -201,6 +202,16 @@ function logUrl(method, url) {
   );
 }
 
+const setVars = {};
+function logEnvVar(varName, varVal) {
+    var dots = " <snipped>...";
+    if (varVal.length < 200) dots = "";
+    const shortVal = varVal.substring(0,200) + dots;
+    log("info", `Set environment Variable ${varName} = "${shortVal}"`);
+    setVars[varName] = varVal
+    fs.writeFileSync(path.join(directory, "env_vars.json"), JSON.stringify(setVars, null, "\t"));
+}
+
 // Track the # of times we have seen a file written to so we don't spam
 // emulation output.
 const MAXWRITES = 10;
@@ -289,6 +300,18 @@ function doWscriptQuit(flag) {
   return _doWscriptQuit;
 }
 
+class DefaultDict {
+    constructor(defaultVal) {
+        return new Proxy({}, {
+            get: (target, name) => name in target ? target[name] : defaultVal
+        })
+    }
+};
+
+function makeDefaultDict(i) {
+    return new DefaultDict(i);
+};
+
 module.exports = {
   argv,
   kill,
@@ -297,6 +320,7 @@ module.exports = {
   throttleCommands,
   noCasePropObj,
   doWscriptQuit,
+  makeDefaultDict,
 
   debug: log.bind(null, "debug"),
   verbose: log.bind(null, "verb"),
@@ -310,6 +334,12 @@ module.exports = {
      */
     return new Proxy(new actualObject(), {
       get: function (target, prop) {
+        if (typeof prop !== "string") {
+          const propType = typeof prop;
+          kill(
+            `Proxy of target ${target} failed. Property is type ${propType}, not string.`
+          );
+        }
         const lProp = prop.toLowerCase();
         if (lProp in target) return target[lProp];
         kill(`${objectName}.${prop} not implemented!`);
@@ -406,6 +436,7 @@ module.exports = {
     return files[filename];
   },
   logUrl,
+  logEnvVar,
   logResource: function (resourceName, emulatedPath, content) {
     // Writing a Blob?
     if (content && content.constructor && content.constructor.name == "Blob") {

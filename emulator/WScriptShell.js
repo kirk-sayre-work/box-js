@@ -13,39 +13,65 @@ function WScriptShell() {
 	appdata: argv["windows-xp"]
 	    ? "C:\\Documents and Settings\\User\\Application Data"
 	    : "C:\\Users\\User\\AppData\\Roaming",
+	localappdata: "C:\\Users\\Sysop12\\AppData\\Local",
 	computername: "DOMAIN-CONTROLLER-1",
 	comspec: "%SystemRoot%\\system32\\cmd.exe",
+	homedrive: "C:",
+	homepath: "\\Users\\Sysop12",
+	logonserver: "\\\\DOMAIN-CONTROLLER-1",
+	number_of_processors: "4",
 	os: "Windows_NT",
+	path: "C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0",
+	pathext: ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC",
 	processor_revision: "0209",
 	processor_architecture: "x86",
 	processor_architew6432: "AMD64",
+	allusersprofile: "C:\\ProgramData",
 	programdata: "C:\\ProgramData",
+	programfiles: "C:\\Program Files",
+	"programfiles(x86)": "C:\\Program Files (x86)",
+	commonprogramfiles: "C:\\Program Files\\Common Files",
+	public: "C:\\Users\\Public",
+	session_name: "Console",
+	systemdrive: "C:",
 	systemroot: "C:\\WINDOWS",
 	//tmp: "C:\\DOCUME~1\\User\\LOCALS~1\\Temp",
 	tmp: "C:\\Users\\SYSOP1~1\\AppData\\Local\\Temp",
 	//temp: "C:\\DOCUME~1\\User\\LOCALS~1\\Temp",
 	temp: "C:\\Users\\SYSOP1~1\\AppData\\Local\\Temp",
 	username: "Sysop12",
+	userdomain: "DOMAIN-CONTROLLER-1",
 	userprofile: "C:\\Users\\Sysop12\\",
 	windir: "C:\\WINDOWS"
     };
 
+    // Environment variables assigned by the sample at runtime.
+    var assignedVars = {};
+
     this._envVarLookup = function (argument) {
 	argument = argument.toLowerCase();
 	if (argument in vars) return vars[argument];
+	if (argument in assignedVars) return assignedVars[argument];
 	// Return a fake value so all environment variable reads succeed?
         if (argv["fake-reg-read"]) return ("Unknown environment variable " + argument);
 	lib.kill(`Unknown parameter ${argument} for WScriptShell.Environment.*`);
     };
     
     this.environment = (x) => {
-	if ((x.toLowerCase() === "system") || (x.toLowerCase() === "process")) {
+	if ((x.toLowerCase() === "system") || (x.toLowerCase() === "process") || (x.toLowerCase() === "user")) {
 	    var r = this._envVarLookup;
 	    r.Item = function(x) {
 		if (x.toLowerCase() === "programdata")
 		    return "C:\\ProgramData";
 		return "Unknown environment variable " + x;
 	    };
+	    r.rvalAssign = function(varName, varVal) {
+		assignedVars[varName] = varVal;
+		lib.logEnvVar(varName, varVal);
+	    };
+	    // Keep Item() callable for reads while still supporting the
+	    // rewritten `Environment("Process")("X") = "Y"` assignment form.
+	    r.Item.rvalAssign = r.rvalAssign;
 	    return r;
 	}
 	return `(Environment variable ${x})`;
@@ -123,6 +149,51 @@ function WScriptShell() {
 	// lacks the HKEY_CURRENT_USER reg key by default (y tho?)
 	this._reg_entries["HKEY_CURRENT_USER"] = {}
 	this._reg_entries["HKEY_CURRENT_USER"]["Control Panel"] = {"International" : {"Locale" : "0x407"}}
+
+	/* Samples routinely resolve an interpreter/LOLBin path through
+	 * App Paths before launching it. The bundled system-registry data
+	 * is XP-era and has none of these, and an unresolved read aborts
+	 * the whole analysis, so seed the ones malware actually asks for.
+	 * system-registry nests on ".", so "powershell.exe" is stored as
+	 * {powershell: {exe: {"@": <path>}}}.
+	 */
+	const _sys32 = "C:\\WINDOWS\\system32\\";
+	const _appPaths = {
+	    "powershell.exe": _sys32 + "WindowsPowerShell\\v1.0\\powershell.exe",
+	    "pwsh.exe": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+	    "cmd.exe": _sys32 + "cmd.exe",
+	    "wscript.exe": _sys32 + "wscript.exe",
+	    "cscript.exe": _sys32 + "cscript.exe",
+	    "mshta.exe": _sys32 + "mshta.exe",
+	    "certutil.exe": _sys32 + "certutil.exe",
+	    "bitsadmin.exe": _sys32 + "bitsadmin.exe",
+	    "curl.exe": _sys32 + "curl.exe",
+	    "rundll32.exe": _sys32 + "rundll32.exe",
+	    "regsvr32.exe": _sys32 + "regsvr32.exe",
+	    "schtasks.exe": _sys32 + "schtasks.exe",
+	    "reg.exe": _sys32 + "reg.exe",
+	    "taskkill.exe": _sys32 + "taskkill.exe",
+	    "notepad.exe": _sys32 + "notepad.exe",
+	    "explorer.exe": "C:\\WINDOWS\\explorer.exe",
+	    "msbuild.exe": "C:\\WINDOWS\\Microsoft.NET\\Framework\\v4.0.30319\\MSBuild.exe",
+	    "chrome.exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+	    "msedge.exe": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+	    "firefox.exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+	    "winword.exe": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+	    "excel.exe": "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
+	};
+	const _cv = this._reg_entries["HKEY_LOCAL_MACHINE"]["SOFTWARE"]["Microsoft"]["Windows"]["CurrentVersion"];
+	if (typeof _cv["App Paths"] === "undefined") _cv["App Paths"] = {};
+	for (const _name in _appPaths) {
+	    const _parts = _name.split(".");
+	    let _node = _cv["App Paths"];
+	    for (let _i = 0; _i < _parts.length; _i++) {
+		if (typeof _node[_parts[_i]] === "undefined") _node[_parts[_i]] = {};
+		_node = _node[_parts[_i]];
+	    }
+	    _node["@"] = _appPaths[_name];
+	    _node["Path"] = _appPaths[_name].substring(0, _appPaths[_name].lastIndexOf("\\"));
+	}
     }
 
     // expand registry acronyms and make lowercase
@@ -140,6 +211,14 @@ function WScriptShell() {
     this._resolveRegKey = (inKey) => {
 
 	var inKeyParts = inKey.split("\\")
+
+	/* A key ending in "\\" names the default value of that subkey,
+	 * which system-registry stores under "@".
+	 */
+	if (inKeyParts.length > 1 && inKeyParts[inKeyParts.length - 1] === "") {
+	    inKeyParts[inKeyParts.length - 1] = "@";
+	}
+
 	var currRegEntry = this._reg_entries
 
 	// compare the given key to the "this" value (see usage below)
@@ -147,18 +226,38 @@ function WScriptShell() {
 	    return normalizeRegKey(key) === normalizeRegKey(this)
 	}
 
-	for (inKeyPart of inKeyParts) {
-
-	    // give the part of the input key we're searching for as the "this" value of keysEqual
-	    var foundKey = Object.keys(currRegEntry).filter(keysEqual, inKeyPart)
-	    if (foundKey.length > 0) {
-		currRegEntry = currRegEntry[foundKey[0]]
+	// Descend one path component, which system-registry may have
+	// split further on "." (e.g. "powershell.exe" is stored nested as
+	// {powershell: {exe: ...}}).
+	var descend = function(node, part) {
+	    var found = Object.keys(node).filter(keysEqual, part)
+	    if (found.length > 0) return node[found[0]]
+	    if (part.indexOf(".") === -1) return undefined
+	    var sub = node
+	    for (const dotPart of part.split(".")) {
+		if (typeof sub !== "object" || sub === null) return undefined
+		var f = Object.keys(sub).filter(keysEqual, dotPart)
+		if (f.length === 0) return undefined
+		sub = sub[f[0]]
 	    }
-	    else {
+	    return sub
+	}
+
+	for (inKeyPart of inKeyParts) {
+	    var next = descend(currRegEntry, inKeyPart)
+	    if (typeof next === "undefined") {
                 // Return a fake value so all registry reads succeed?
                 if (argv["fake-reg-read"]) return "FAKE_REG_VALUE";
 		return undefined
 	    }
+	    currRegEntry = next
+	}
+
+	/* Reading a subkey that carries a default value yields that value,
+	 * not the subkey object.
+	 */
+	if (currRegEntry && typeof currRegEntry === "object" && typeof currRegEntry["@"] === "string") {
+	    return currRegEntry["@"]
 	}
 
 	return currRegEntry
