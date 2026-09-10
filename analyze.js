@@ -484,7 +484,8 @@ function rewrite(code, useException=false) {
     orig_code = code;
     code = code.toString().replace(/"use strict"/g, '"STRICT MODE NOT SUPPORTED"');
     code = code.toString().replace(/'use strict'/g, "'STRICT MODE NOT SUPPORTED'");
-
+    code = code.trim();
+    
     // The following 2 code rewrites should not be applied to patterns
     // in string literals. Hide the string literals first.
     //
@@ -499,6 +500,9 @@ function rewrite(code, useException=false) {
     //console.log(strMap);
     //console.log("!!!! STRMAP !!!!");
 
+    // Could be a NodeJS script. Comment out things like '#!/usr/bin/env node'.
+    code = ("\n" + code).toString().replace(/\n#/g, "\n//#");
+    
     // Some samples for some reason have spurious spaces in '==' type
     // expressions. Fix those while the strings are hidden.
     code = code.toString().replace(/= +=/g, "==");
@@ -653,6 +657,8 @@ cc decoder.c -o decoder
             return;
         }
 
+        const partial_code = code;
+        
         //console.log("!!!! CODE: 4 !!!!");
         //console.log(code);                
         //console.log("!!!! CODE: 4 !!!!");
@@ -844,11 +850,11 @@ cc decoder.c -o decoder
             code = escodegen.generate(tree);
         }
         catch (e) {
-            lib.error("Couldn't generate rewritten code. Using original code:");
+            lib.error("Couldn't generate rewritten code. Using partially rewritten code:");
             lib.error(e);
             lib.error("");
-            //console.log(orig_code);
-            return orig_code;
+            //console.log(partial_code);
+            return partial_code;
         }
 
         //console.log("!!!! CODE: 14 !!!!");

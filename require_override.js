@@ -9,6 +9,7 @@ function require(arg) {
         "child_process" : {
             execSync: _execSync,
             spawn: _spawn,
+            spawnSync: _spawn,
             fork: _fork,
             exec: _execSync,
         },
@@ -37,6 +38,7 @@ function require(arg) {
         },
         "fs" : {
             writeFileSync : _writeFileSync,
+            readFileSync : _readFileSync,
             mkdirSync : _mkdirSync,
             existsSync : _existsSync,
             statSync : _statSync,

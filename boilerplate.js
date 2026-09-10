@@ -2247,7 +2247,13 @@ var process = {
         node: "22.0.3",
     },
     env: {
+        "USER" : "legituser",
+        "USERNAME" : "legituser",
+        "USERPROFILE" : "C:\Users\YourUsername",
+        "HOME" : "C:\Users\YourUsername",
     },
+    cwd: function () { return "C:\Users\YourUsername" },
+    platform : "win32",
 }
 
 // Stubbed Node spawn() function.
@@ -2781,6 +2787,12 @@ function _writeFileSync(path, buffer) {
     const uuid = lib.getUUID();
     lib.logResource(uuid, path, buffer);
     return true;
+}
+
+// Stubbed fs.readFileSync().
+function _readFileSync(path) {
+    logIOC("fs.readFileSync()", path, "The script read '" + path + "' with fs.readFileSync().");
+    return "Line 1\nLine2";
 }
 
 // Stubbed fs.mkdirSync().
