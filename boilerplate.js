@@ -2372,6 +2372,25 @@ var _http = {
     },
 };
 
+// Stubbed Node tls package.
+const _tls = {
+    // For debugging.
+    __name: "_tls",
+
+    connect: function(config, callback) {
+        const host = config.host;
+        var port = "";
+        if (typeof(config.port) != "undefined") port = ":" + config.port;
+        if (typeof(host) == "undefined") return;
+        const url = "https://" + host + port;
+        logIOC('tls.connect()', {url: url}, "The script made a connection to " + host + port + " with tls.connect().");
+        lib.logUrl('tls.connect()', url);
+        return {
+            on: function() {},
+        };
+    },
+};
+
 // Stubbed Node socket.io-client function.
 function _io_client(url) {
     logIOC('socket.io-client()', {url: url}, "The script opened a socket with socket.io-client().");
@@ -2408,6 +2427,12 @@ function _machineId() {
 
 function _machineIdSync() {
     return "86753094-cae9-5feb-2112-13f82a04f5e4";
+};
+
+// Stubbed Node utils package.
+const _util = {
+    __name: "__util",
+    inherits: function() {},
 };
 
 // Fake value for Node __dirname global variable.
@@ -2555,9 +2580,9 @@ var external = {
 };
 
 // Stubbed crypto class.
-const crypto = {
+const _crypto = {
     // For debugging.
-    __name: "crypto",
+    __name: "_crypto",
     getRandomValues : function(arr) {
         // Not random so runs are deterministic.
         var r = [];

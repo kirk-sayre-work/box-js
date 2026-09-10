@@ -52,7 +52,10 @@ function require(arg) {
             userInfo: _NODE_os_userInfo,
             hostname: _NODE_os_hostname,
             networkInterfaces: _NODE_os_networkInterfaces,
-        }
+        },
+        "tls" : _tls,
+        "util" : _util,
+        "crypto" : _crypto,
     }
     if (typeof overrides[arg] !== "undefined") return overrides[arg];
     try {
