@@ -4,6 +4,7 @@ const equality_rewriter = require("./equality_rewriter");
 const escodegen = require("escodegen");
 const acorn = require("acorn");
 const fs = require("fs");
+const os = require("os");
 const iconv = require("iconv-lite");
 
 /* A byte-order mark is part of the file and is authoritative about its
@@ -389,17 +390,37 @@ function hideStrs(s) {
   // Use reliable comment stripping with strip-comments library
   // NOTE: stripComments() can sometimes break valid JS (e.g., strings containing "//")
   // Try it first, but fall back to original code if it breaks parsing
+  // Run in a child process with timeout to avoid hanging on large files.
   try {
-    const stripped = stripComments(s);
-    // Verify the stripped code is still valid JavaScript
-    acorn.parse(stripped, {
-      ecmaVersion: "latest",
-      allowReturnOutsideFunction: true,
-    });
-    // If parsing succeeded, use the stripped version
-    s = stripped;
+    const { execFileSync } = require("child_process");
+    const stripTimeout = (argv["strip-timeout"] || argv.timeout || 10) * 1000;
+    const childScript = `
+      const fs = require("fs");
+      const code = fs.readFileSync(process.argv[1], "utf8");
+      const stripComments = require("strip-comments");
+      const acorn = require("acorn");
+      const stripped = stripComments(code);
+      acorn.parse(stripped, { ecmaVersion: "latest", allowReturnOutsideFunction: true });
+      process.stdout.write(stripped);
+    `;
+    const osTmp = require("os");
+    const pathTmp = require("path");
+    const tmpFile = pathTmp.join(osTmp.tmpdir(), "boxjs-strip-" + process.pid + ".js");
+    require("fs").writeFileSync(tmpFile, s);
+    try {
+      s = execFileSync("node", ["-e", childScript, tmpFile], {
+        timeout: stripTimeout,
+        maxBuffer: 1024 * 1024 * 50,
+        encoding: "utf8",
+      });
+    } finally {
+      try { require("fs").unlinkSync(tmpFile); } catch (_) {}
+    }
   } catch (e) {
-    // stripComments broke the code or code was already invalid
+    if (e.killed || e.signal === "SIGTERM") {
+      lib.warning(`Comment stripping timed out after ${(argv["strip-timeout"] || argv.timeout || 10)}s, skipping.`);
+    }
+    // stripComments broke the code, timed out, or code was already invalid
     // Continue with original code - manual comment tracking below will handle it
   }
 
@@ -995,7 +1016,11 @@ cc decoder.c -o decoder
             lib.verbose(`    Preprocessing with uglify-es v${require("uglify-es/package.json").version} (remove --preprocess to skip)...`, false);
             const unsafe = !!argv["unsafe-preprocess"];
             lib.debug("Unsafe preprocess: " + unsafe);
-            const result = require("uglify-es").minify(code, {
+            /* uglify on a large sample can run for minutes. Run it in a child
+             * process so --preprocess-timeout can cap it without taking the
+             * whole analysis down with it. */
+            const preprocessTimeout = (argv["preprocess-timeout"] || argv.timeout || 10) * 1000;
+            const uglifyOptions = {
                 parse: {
                     bare_returns: true, // used when rewriting function bodies
                 },
@@ -1041,11 +1066,42 @@ cc decoder.c -o decoder
                     beautify: true,
                     comments: true,
                 },
-            });
-            if (result.error) {
-                lib.error("Couldn't preprocess with uglify-es: " + JSON.stringify(result.error));
-            } else {
-                code = result.code;
+            };
+            try {
+                const { execFileSync } = require("child_process");
+                const childScript = `
+                    const fs = require("fs");
+                    const opts = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                    const code = fs.readFileSync(process.argv[2], "utf8");
+                    const result = require(${JSON.stringify(require.resolve("uglify-es"))}).minify(code, opts);
+                    if (result.error) {
+                        process.stderr.write(JSON.stringify(result.error));
+                        process.exit(1);
+                    }
+                    process.stdout.write(result.code);
+                `;
+                const tmpOpts = path.join(os.tmpdir(), `boxjs-uglify-opts-${process.pid}.json`);
+                const tmpCode = path.join(os.tmpdir(), `boxjs-uglify-code-${process.pid}.js`);
+                fs.writeFileSync(tmpOpts, JSON.stringify(uglifyOptions));
+                fs.writeFileSync(tmpCode, code);
+                try {
+                    code = execFileSync("node", ["-e", childScript, tmpOpts, tmpCode], {
+                        timeout: preprocessTimeout,
+                        maxBuffer: 1024 * 1024 * 50,
+                        encoding: "utf8",
+                    });
+                } finally {
+                    try { fs.unlinkSync(tmpOpts); } catch (_) {}
+                    try { fs.unlinkSync(tmpCode); } catch (_) {}
+                }
+            } catch (e) {
+                if (e.killed || e.signal === "SIGTERM") {
+                    lib.warning(`Preprocessing timed out after ${preprocessTimeout / 1000}s, skipping.`);
+                } else if (e.status === 1 && e.stderr) {
+                    lib.error("Couldn't preprocess with uglify-es: " + e.stderr);
+                } else {
+                    lib.warning("Preprocessing skipped: " + e.message);
+                }
             }
         }
 
@@ -1479,6 +1535,30 @@ var wscript_proxy = new Proxy(
 const sandbox = {
   // Inject lib for sandbox functions to use
   lib: lib,
+  // Proxy for Components.classes - created here in host context because
+  // vm2 >=3.10.4 disables Proxy inside the sandbox to prevent escape via
+  // handler leakage. Boilerplate.js references this as __componentClassesProxy.
+  __componentClassesProxy: new Proxy({}, {
+    get: (target, name) => {
+      // Returns a stubbed component class for any property access.
+      // The actual _fakeComponentClass is defined in boilerplate.js,
+      // so return a minimal stub here; boilerplate.js will override
+      // Components.classes with the full version if available.
+      return {
+        getService: function() {
+          return {
+            getCharPref: function() {},
+            setCharPref: function() {},
+            newURI: function(url) {
+              lib.logUrl('Components.classes["..."].getService().newURI()', url);
+            },
+            getCodebasePrincipal: function() {},
+            getLocalStorageForPrincipal: function() {},
+          };
+        },
+      };
+    }
+  }),
   // Mock event object for browser compatibility - uses Proxy for dynamic event types
   event: new Proxy(
     {
@@ -2897,9 +2977,9 @@ function mapCLSID(clsid) {
   }
 }
 
-function _makeDomDocument() {
+function _makeDomDocument(originalName) {
     const r = {
-        __name: "_makeDomDocument()",
+        __name: originalName || "_makeDomDocument()",
         createElement: function(tag) {
             const r = {
                 dataType: "??",
@@ -2974,7 +3054,9 @@ function ActiveXObject(name) {
         }
     }
 
-    // Actually emulate the ActiveX object creation.
+    // Actually emulate the ActiveX object creation. Keep the original
+    // casing for forensic __name tracking before folding for dispatch.
+    const originalName = name;
     name = name.toLowerCase()
     if (name.match("xmlhttp") || name.match("winhttprequest")) {
         return require("./emulator/XMLHTTP");
@@ -2983,12 +3065,12 @@ function ActiveXObject(name) {
         return require("./emulator/XSLTemplate");
     }
     if ((name.match("domdocument")) || (name.match("xmldom"))) {
-        const r = _makeDomDocument();
+        const r = _makeDomDocument(originalName);
         return r;
     }
     if (name.match("htmlfile")) {
         const r = {
-            __name: "htmlfile",
+            __name: originalName || "htmlfile",
             "parentWindow" : {
                 "clipboardData" : "Some data",
             },
@@ -2997,7 +3079,7 @@ function ActiveXObject(name) {
     }
     if (name.match("dom")) {
         const r = {
-            __name: "dom",
+            __name: originalName || "dom",
             document: sandbox.document,
             createElement: function(tag) {
                 var r = this.document.createElement(tag);

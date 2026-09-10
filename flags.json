@@ -45,7 +45,17 @@
         {
             "name": "timeout",
             "type": "Number",
-            "description": "The script will timeout after this many seconds (default 10)"
+            "description": "The script will timeout after this many seconds (default 10). Also used as the default for --strip-timeout and --preprocess-timeout if they are not set."
+        },
+        {
+            "name": "strip-timeout",
+            "type": "Number",
+            "description": "Comment stripping will timeout after this many seconds (defaults to --timeout value)"
+        },
+        {
+            "name": "preprocess-timeout",
+            "type": "Number",
+            "description": "Uglify-es preprocessing will timeout after this many seconds (defaults to --timeout value)"
         },
         {
             "name": "output-dir",

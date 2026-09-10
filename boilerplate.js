@@ -2704,6 +2704,7 @@ class MutationObserver {
     observe() {};
 };
 
+// Node constants.
 Node = {
     // For debugging.
     __name: "Node",
@@ -2718,7 +2719,7 @@ check_loader = "";
 
 // Node.js process object stubbing.
 process.env = {
-    USERPROFILE : "C:\Users\YourUsername",    
+    USERPROFILE : "C:\Users\YourUsername",
 }
 process.platform = "win32";
 
