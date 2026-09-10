@@ -887,6 +887,7 @@ if (argv["check"]) {
 
         // Acorn gets fooled if the 1st line is a VBS "' ..."
         // comment. Check for that.
+        code = code.replace(/'use +strict' *;?/, "");
         if (code.trim()[0] == "'") {
             console.log("JS syntax is invalid.");
             process.exit(1);
