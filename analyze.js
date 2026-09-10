@@ -5,6 +5,20 @@ const escodegen = require("escodegen");
 const acorn = require("acorn");
 const fs = require("fs");
 const iconv = require("iconv-lite");
+
+/* A byte-order mark is part of the file and is authoritative about its
+ * encoding, so it outranks an --encoding override. Production callers pass
+ * --encoding=utf8 as a blanket default, which silently mangles the UTF-16
+ * JScript that Windows droppers are routinely saved as: acorn then dies on
+ * the mojibake with "Unexpected character" and the sample yields nothing.
+ */
+function bomEncoding(buf) {
+    if (!buf || buf.length < 2) return null;
+    if (buf[0] === 0xff && buf[1] === 0xfe) return "utf16le";
+    if (buf[0] === 0xfe && buf[1] === 0xff) return "utf16be";
+    if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return "utf8";
+    return null;
+}
 const path = require("path");
 const { VM } = require("vm2");
 const child_process = require("child_process");
@@ -21,7 +35,10 @@ const filename = process.argv[2];
 if (argv["check"]) {
     const sampleBuffer = fs.readFileSync(filename);
     let encoding;
-    if (argv.encoding) {
+    const bom = bomEncoding(sampleBuffer);
+    if (bom) {
+        encoding = bom;
+    } else if (argv.encoding) {
         encoding = argv.encoding;
     } else {
         encoding = require("jschardet").detect(sampleBuffer).encoding;
@@ -69,7 +86,17 @@ if (fs.existsSync(git_path) && fs.lstatSync(git_path).isDirectory()) {
 lib.verbose(`Analyzing ${filename}`, false);
 const sampleBuffer = fs.readFileSync(filename);
 let encoding;
-if (argv.encoding) {
+const sampleBom = bomEncoding(sampleBuffer);
+if (sampleBom) {
+  if (argv.encoding && argv.encoding.toLowerCase().replace(/[-_]/g, "") !== sampleBom) {
+    lib.warning(
+      `Sample carries a ${sampleBom} BOM; using it instead of --encoding=${argv.encoding}`
+    );
+  } else {
+    lib.debug(`Using ${sampleBom} from the sample's BOM`);
+  }
+  encoding = sampleBom;
+} else if (argv.encoding) {
   lib.debug("Using argv encoding");
   encoding = argv.encoding;
 } else {
@@ -803,14 +830,10 @@ function rewrite(code, useException=false) {
     // Don't do this for huge samples.
     if (code.length < 2e6) {
         var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
-        var rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[;]))/g;
-        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
-        //code = code.toString().replace(rvaluePat, ';/* ASSIGNING TO RVALUE */');
+        code = code.toString().replace(rvaluePat, ";/* ASSIGNING TO RVALUE */");
 
         rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
-        rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[\n]))/g;
-        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
-        //code = code.toString().replace(rvaluePat, ';// ASSIGNING TO RVALUE');
+        code = code.toString().replace(rvaluePat, ";// ASSIGNING TO RVALUE");
 
         //console.log("!!!! CODE: 2 !!!!");
         //console.log(code);                
