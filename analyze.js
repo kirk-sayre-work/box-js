@@ -391,9 +391,14 @@ function hideStrs(s) {
   // NOTE: stripComments() can sometimes break valid JS (e.g., strings containing "//")
   // Try it first, but fall back to original code if it breaks parsing
   // Run in a child process with timeout to avoid hanging on large files.
+  /* Default to a slice of --timeout, not all of it. Comment stripping,
+   * preprocessing and emulation share one budget; letting any single stage
+   * claim the whole thing means a multi-MB sample is killed before a single
+   * IOC is logged. Callers can still override explicitly. Declared outside
+   * the try so the timeout handler below can report it. */
+  const stripTimeout = (argv["strip-timeout"] || Math.min((argv.timeout || 10) / 6, 10)) * 1000;
   try {
     const { execFileSync } = require("child_process");
-    const stripTimeout = (argv["strip-timeout"] || argv.timeout || 10) * 1000;
     const childScript = `
       const fs = require("fs");
       const code = fs.readFileSync(process.argv[1], "utf8");
@@ -418,7 +423,7 @@ function hideStrs(s) {
     }
   } catch (e) {
     if (e.killed || e.signal === "SIGTERM") {
-      lib.warning(`Comment stripping timed out after ${(argv["strip-timeout"] || argv.timeout || 10)}s, skipping.`);
+      lib.warning(`Comment stripping timed out after ${stripTimeout / 1000}s, skipping.`);
     }
     // stripComments broke the code, timed out, or code was already invalid
     // Continue with original code - manual comment tracking below will handle it
@@ -1019,7 +1024,8 @@ cc decoder.c -o decoder
             /* uglify on a large sample can run for minutes. Run it in a child
              * process so --preprocess-timeout can cap it without taking the
              * whole analysis down with it. */
-            const preprocessTimeout = (argv["preprocess-timeout"] || argv.timeout || 10) * 1000;
+            // Same reasoning as --strip-timeout: a slice of the budget, not all of it.
+            const preprocessTimeout = (argv["preprocess-timeout"] || Math.min((argv.timeout || 10) / 4, 15)) * 1000;
             const uglifyOptions = {
                 parse: {
                     bare_returns: true, // used when rewriting function bodies
