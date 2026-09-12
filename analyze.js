@@ -4,16 +4,77 @@ const equality_rewriter = require("./equality_rewriter");
 const escodegen = require("escodegen");
 const acorn = require("acorn");
 const fs = require("fs");
+const os = require("os");
 const iconv = require("iconv-lite");
+
+/* A byte-order mark is part of the file and is authoritative about its
+ * encoding, so it outranks an --encoding override. Production callers pass
+ * --encoding=utf8 as a blanket default, which silently mangles the UTF-16
+ * JScript that Windows droppers are routinely saved as: acorn then dies on
+ * the mojibake with "Unexpected character" and the sample yields nothing.
+ */
+function bomEncoding(buf) {
+    if (!buf || buf.length < 2) return null;
+    if (buf[0] === 0xff && buf[1] === 0xfe) return "utf16le";
+    if (buf[0] === 0xfe && buf[1] === 0xff) return "utf16be";
+    if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return "utf8";
+    return null;
+}
 const path = require("path");
-const {VM} = require("vm2");
+const { VM } = require("vm2");
 const child_process = require("child_process");
 const argv = require("./argv.js").run;
 const jsdom = require("jsdom").JSDOM;
 const dom = new jsdom(`<html><head></head><body></body></html>`);
-const { DOMParser } = require('xmldom');
+/* xmldom@0.6.0 carries a critical advisory (GHSA: "allows multiple root nodes in
+ * a DOM") with no fixed version — the package is unmaintained. It is retained
+ * DELIBERATELY. Swapping to the maintained @xmldom/xmldom@0.9 was measured and
+ * REVERTED: 0.9 produces behaviourally different documents, and on real samples
+ * box-js's MSXML emulation then takes a different branch and loses IOCs (corpus
+ * task3813: 15 IOCs -> 12, dropping an XMLHTTP fetch of a live C2). The advisory
+ * describes parser leniency, and nothing here makes a security decision from the
+ * DOM, so the detection loss is the worse trade. Re-attempt only with the
+ * document-behaviour difference pinned down and shimmed, validated on the corpus.
+ */
+const { DOMParser } = require("xmldom");
+const stripComments = require("strip-comments");
 
 const filename = process.argv[2];
+
+// Just check the syntax of the JS sample and exit?
+// Do this early before any lib logging that requires output directory
+if (argv["check"]) {
+    const sampleBuffer = fs.readFileSync(filename);
+    let encoding;
+    const bom = bomEncoding(sampleBuffer);
+    if (bom) {
+        encoding = bom;
+    } else if (argv.encoding) {
+        encoding = argv.encoding;
+    } else {
+        encoding = require("jschardet").detect(sampleBuffer).encoding;
+        if (encoding === null) {
+            encoding = "utf8";
+        }
+    }
+    let code = iconv.decode(sampleBuffer, encoding);
+
+    try {
+        let tree = acorn.parse(code, {
+            ecmaVersion: "latest",
+            allowReturnOutsideFunction: true,
+            plugins: {
+                JScriptMemberFunctionStatement: !argv["no-rewrite-prototype"],
+            },
+        });
+	console.log("JS syntax is valid.");
+	process.exit(0);
+    } catch (e) {
+	console.log("JS syntax is invalid.");
+	console.log(e);
+	process.exit(1);
+    }
+}
 
 // JScriptMemberFunctionStatement plugin registration
 // Plugin system is now different in Acorn 8.*, so commenting out.
@@ -24,32 +85,56 @@ lib.verbose("Box-js version: " + require("./package.json").version);
 
 let git_path = path.join(__dirname, ".git");
 if (fs.existsSync(git_path) && fs.lstatSync(git_path).isDirectory()) {
-    lib.verbose("Commit: " + fs.readFileSync(path.join(__dirname, ".git/refs/heads/master"), "utf8").replace(/\n/, ""));
+  lib.verbose(
+    "Commit: " +
+      fs
+        .readFileSync(path.join(__dirname, ".git/refs/heads/master"), "utf8")
+        .replace(/\n/, "")
+  );
 } else {
-    lib.verbose("No git folder found.");
+  lib.verbose("No git folder found.");
 }
 lib.verbose(`Analyzing ${filename}`, false);
 const sampleBuffer = fs.readFileSync(filename);
 let encoding;
-if (argv.encoding) {
-    lib.debug("Using argv encoding");
-    encoding = argv.encoding;
+const sampleBom = bomEncoding(sampleBuffer);
+if (sampleBom) {
+  if (argv.encoding && argv.encoding.toLowerCase().replace(/[-_]/g, "") !== sampleBom) {
+    lib.warning(
+      `Sample carries a ${sampleBom} BOM; using it instead of --encoding=${argv.encoding}`
+    );
+  } else {
+    lib.debug(`Using ${sampleBom} from the sample's BOM`);
+  }
+  encoding = sampleBom;
+} else if (argv.encoding) {
+  lib.debug("Using argv encoding");
+  encoding = argv.encoding;
 } else {
-    lib.debug("Using detected encoding");
-    encoding = require("jschardet").detect(sampleBuffer).encoding;
-    if (encoding === null) {
-        lib.warning("jschardet (v" + require("jschardet/package.json").version + ") couldn't detect encoding, using UTF-8");
-        encoding = "utf8";
-    } else {
-        lib.debug("jschardet (v" + require("jschardet/package.json").version + ") detected encoding " + encoding);
-    }
+  lib.debug("Using detected encoding");
+  encoding = require("jschardet").detect(sampleBuffer).encoding;
+  if (encoding === null) {
+    lib.warning(
+      "jschardet (v" +
+        require("jschardet/package.json").version +
+        ") couldn't detect encoding, using UTF-8"
+    );
+    encoding = "utf8";
+  } else {
+    lib.warning(
+      "jschardet (v" +
+        require("jschardet/package.json").version +
+        ") detected encoding " +
+        encoding
+    );
+  }
 }
 
 let code = iconv.decode(sampleBuffer, encoding);
 
 let rawcode;
 if (argv["activex-as-ioc"]) {
-    rawcode = iconv.decode(sampleBuffer, encoding);
+  rawcode = iconv.decode(sampleBuffer, encoding);
 }
 
 /*
@@ -62,378 +147,635 @@ if (argv["activex-as-ioc"]) {
 */
 
 function lacksBinary(name) {
-    const path = child_process.spawnSync("command", ["-v", name], {
-        shell: true
-    }).stdout;
-    return path.length === 0;
+  const path = child_process.spawnSync("command", ["-v", name], {
+    shell: true,
+  }).stdout;
+  return path.length === 0;
 }
 
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
 }
 
 function stripSingleLineComments(s) {
-    const lines = s.split("\n");
-    var r = "";
-    for (const line of lines) {
-        var lineStrip = line.trim() + "\r";
-        for (const subLine of lineStrip.split("\r")) {
-            // Full line comment?
-            var subLineStrip = subLine.trim();
-            if (subLineStrip.startsWith("//")) continue;
-            r += subLineStrip + "\n";
-        }
+  const lines = s.split("\n");
+  var r = "";
+  for (const line of lines) {
+    var lineStrip = line.trim() + "\r";
+    for (const subLine of lineStrip.split("\r")) {
+      // Full line comment?
+      var subLineStrip = subLine.trim();
+      if (subLineStrip.startsWith("//")) continue;
+      r += subLineStrip + "\n";
     }
-    return r;
+  }
+  return r;
 }
 
 function isAlphaNumeric(str) {
-    var code, i;
+  var code, i;
 
-    if (str.length == 0) return false;
-    code = str.charCodeAt(0);
-    if (!(code > 47 && code < 58) && // numeric (0-9)
-        !(code > 64 && code < 91) && // upper alpha (A-Z)
-        !(code > 96 && code < 123)) { // lower alpha (a-z)
-        return false;
+  if (str.length == 0) return false;
+  code = str.charCodeAt(0);
+  if (
+    !(code > 47 && code < 58) && // numeric (0-9)
+    !(code > 64 && code < 91) && // upper alpha (A-Z)
+    !(code > 96 && code < 123)
+  ) {
+    // lower alpha (a-z)
+    return false;
+  }
+  return true;
+}
+
+const __timeoutTracker = Object.create(null);
+
+function createFetchResponse(url, buffer, status, statusText, headers) {
+  const headerMap = headers || {};
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    url,
+    headers: {
+      get(name) {
+        if (!name) return null;
+        return headerMap[name.toLowerCase()] || null;
+      },
+      has(name) {
+        if (!name) return false;
+        return Object.prototype.hasOwnProperty.call(
+          headerMap,
+          name.toLowerCase()
+        );
+      },
+    },
+    text() {
+      return Promise.resolve(buffer.toString("utf8"));
+    },
+    json() {
+      return new Promise((resolve, reject) => {
+        try {
+          resolve(JSON.parse(buffer.toString("utf8")));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    },
+    arrayBuffer() {
+      const view = buffer.buffer.slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength
+      );
+      return Promise.resolve(view);
+    },
+    blob() {
+      const type = headerMap["content-type"] || "application/octet-stream";
+      try {
+        return Promise.resolve(new sandbox.Blob([buffer], { type }));
+      } catch (e) {
+        lib.verbose(`Failed to create Blob from fetch response: ${e.message}`);
+        return Promise.resolve({ parts: [buffer], options: { type } });
+      }
+    },
+    clone() {
+      return createFetchResponse(
+        url,
+        Buffer.from(buffer),
+        status,
+        statusText,
+        Object.assign({}, headerMap)
+      );
+    },
+  };
+}
+
+function emulateFetch(input, init) {
+  const options = init || {};
+  const url = typeof input === "string" ? input : "" + input;
+  const method = (options.method || "GET").toUpperCase();
+  const headers = options.headers || {};
+  const body = options.body;
+  lib.verbose(`fetch() stub invoked for ${method} ${url}`);
+  lib.logIOC(
+    "fetch",
+    { url, method, headers },
+    "The script fetch()ed a URL."
+  );
+  lib.logUrl("fetch", url);
+  return new Promise((resolve) => {
+    let response;
+    try {
+      response = lib.fetchUrl(method, url, headers, body);
+    } catch (e) {
+      lib.warning(`fetch() emulation failed: ${e.message}`);
+      resolve(
+        createFetchResponse(
+          url,
+          Buffer.alloc(0),
+          500,
+          "Emulated fetch failure",
+          {}
+        )
+      );
+      return;
     }
-    return true;
-};
+    const status = argv["fake-download"] ? 200 : argv.download ? 200 : 404;
+    const statusText = status === 200 ? "OK" : "Not Found";
+    const buffer =
+      response && Buffer.isBuffer(response.body)
+        ? response.body
+        : Buffer.from((response && response.body) || "");
+    const headersLower = {};
+    if (response && response.headers) {
+      for (const key of Object.keys(response.headers)) {
+        headersLower[key.toLowerCase()] = response.headers[key];
+      }
+    }
+    resolve(createFetchResponse(url, buffer, status, statusText, headersLower));
+  });
+}
+
+function queueInlineScript(source, code) {
+  if (typeof code !== "string") return;
+  const trimmed = code.trim();
+  if (!trimmed) return;
+  lib.verbose(
+    `Executing inline script from ${source} (${trimmed.length} bytes)`
+  );
+  lib.logIOC(
+    "DOM Script",
+    { source, length: trimmed.length },
+    "The script executed inline script content."
+  );
+  const logged = lib.logJS(code);
+  if (typeof sandbox.dynamicScripts === "undefined") {
+    sandbox.dynamicScripts = [];
+  }
+  sandbox.dynamicScripts.push(logged);
+}
+
+function handleDomAppend(element, source) {
+  if (typeof element === "object" && element !== null) {
+    const tagName = element.tagName
+      ? String(element.tagName).toLowerCase()
+      : undefined;
+    const logData = {
+      type: tagName || element.myType || "object",
+    };
+    if (typeof element.textContent === "string") {
+      logData.textLength = element.textContent.length;
+    }
+    if (typeof element.innerHTML === "string" && element.innerHTML.length) {
+      logData.htmlLength = element.innerHTML.length;
+    }
+    if (typeof element.src === "string" && element.src) {
+      const normalizedSrc = element.src.startsWith("//")
+        ? `https:${element.src}`
+        : element.src;
+      logData.src = normalizedSrc;
+      if (tagName === "script") {
+        lib.logIOC(
+          "ScriptSrc",
+          { url: normalizedSrc, tag: element.tagName },
+          `Script element loads external JavaScript from: ${normalizedSrc}`
+        );
+      } else {
+        lib.logUrl(`${tagName || "element"}.src`, normalizedSrc);
+      }
+    }
+    lib.logIOC(
+      "DOM Write",
+      logData,
+      "The script appended an HTML node to the DOM"
+    );
+    const inlineCode =
+      typeof element.textContent === "string" && element.textContent.trim()
+        ? element.textContent
+        : typeof element.innerHTML === "string"
+        ? element.innerHTML
+        : "";
+    queueInlineScript(source, inlineCode);
+  } else if (typeof element === "string") {
+    lib.logIOC(
+      "DOM Write",
+      { type: "string", length: element.length },
+      "The script appended an HTML node to the DOM"
+    );
+    queueInlineScript(source, element);
+  } else if (typeof element !== "undefined") {
+    lib.logIOC(
+      "DOM Write",
+      { type: typeof element },
+      "The script appended an HTML node to the DOM"
+    );
+  }
+  return element;
+}
 
 function hideStrs(s) {
-    var inStrSingle = false;
-    var inStrDouble = false;
-    var inStrBackTick = false;
-    var inComment = false;
-    var inCommentSingle = false;
-    var inRegex = false
-    var oldInRegex = false
-    var currStr = undefined;
-    var prevChar = "";
-    var prevPrevChar = "";
-    var allStrs = {};
-    var escapedSlash = false;
-    var prevEscapedSlash = false;
-    var counter = 1000000;
-    var r = "";
-    var skip = false;
-    var justExitedComment = false;
-    var slashSubstr = ""
-    var resetSlashes = false;
-    var justStartedRegex = false;
-    var inSquareBrackets = false;
-    var skippedSpace = false;
-    
-    s = stripSingleLineComments(s);
-    // For debugging.
-    var window = "               ";
-    // Special case. Regex uses like '/.../["test"]' are really hard
-    // to deal with. Hide all '["test"]' instances.
-    var tmpName = "HIDE_" + counter++;
-    s = s.replace(/\["test"\]/g, tmpName);
-    allStrs[tmpName] = '["test"]';
-    tmpName = "HIDE_" + counter++;
-    s = s.replace(/\['test'\]/g, tmpName);
-    allStrs[tmpName] = "['test']";
-    // Similar to the above, obfuscator.io constructs like
-    // '/.../[0x_fff(' are also really hard to deal with. Replace
-    // those also.
-    tmpName = "HIDE_" + counter++;
-    // Ony match exprs that start with the '/' and keep the '/' in the
-    // code to close out the regex. We are doing this because
-    // Replacement name must start with HIDE_.
-    s = s.replace(/\/\[_0x/g, "/" + tmpName);
-    allStrs[tmpName] = "[_0x";
-    //console.log("prevprev,\tprev,\tcurr,\tdbl,\tsingle,\tcommsingl,\tcomm,\tregex,\toldinregex,\tslash,\tjustexitcom");
-    for (let i = 0; i < s.length; i++) {
+  var inStrSingle = false;
+  var inStrDouble = false;
+  var inStrBackTick = false;
+  var inComment = false;
+  var inCommentSingle = false;
+  var inRegex = false;
+  var oldInRegex = false;
+  var currStr = undefined;
+  var prevChar = "";
+  var prevPrevChar = "";
+  var allStrs = {};
+  var escapedSlash = false;
+  var prevEscapedSlash = false;
+  var counter = 1000000;
+  var r = "";
+  var skip = false;
+  var justExitedComment = false;
+  var slashSubstr = "";
+  var resetSlashes = false;
+  var justStartedRegex = false;
+  var inSquareBrackets = false;
+  var skippedSpace = false;
 
-        // Track consecutive backslashes. We use this to tell if the
-        // current back slash has been escaped (even # of backslashes)
-        // or is escaping the next character (odd # of slashes).
-        if (prevChar == "\\" && (slashSubstr.length == 0)) {
-            slashSubstr = "\\";
-        }
-        else if (prevChar == "\\" && (slashSubstr.length > 0)) {
-            slashSubstr += "\\";
-        }        
-        else if (prevChar != "\\") {
-            slashSubstr = "";
-        }
-        // Backslash escaping gets 'reset' when hitting a space.
-        var currChar = s[i];
-        if ((currChar == " ") && slashSubstr) {
-            slashSubstr = "";
-            resetSlashes = true;
-        }
-        // Debugging.
-        //window = window.slice(1,) + currChar;
-        //console.log(window);
-        
-        // Start /* */ comment?
-        var oldInComment = inComment;
-        inComment = inComment || ((prevChar == "/") && (currChar == "*") && !inStrDouble && !inStrSingle && !inCommentSingle && !inStrBackTick && (!inRegex || !oldInRegex));
-        //console.log(JSON.stringify([prevPrevChar, prevChar, currChar, inStrDouble, inStrSingle, inCommentSingle, inComment, inRegex, oldInRegex, slashSubstr, justExitedComment]))
-        //console.log(r);
-        
-        // In /* */ comment?
-        if (inComment) {
-
-            // We are stripping /* */ comments, so drop the '/' if we
-            // just entered the comment.
-            if (oldInComment != inComment) {
-                inRegex = false;
-                r = r.slice(0, -1);
-            }
-            
-            // Dropping /* */ comments, so don't save current char.
-
-            // Out of comment?
-            if ((prevChar == "*") && (currChar == "/") && !skippedSpace) {
-                inComment = false;
-                // Handle FP single line comment detection for things
-                // like '/* comm1 *//* comm2 */'.
-                justExitedComment = true;
-            }
-
-            // Keep going until we leave the comment. Recognizing some
-            // constructs is hard with whitespace, so strip that out
-            // when tracking previous characters.
-            if (currChar != " ") {
-                prevPrevChar = prevChar;
-                prevChar = currChar;
-                skippedSpace = false;
-            }
-            else {
-                skippedSpace = true;
-            }
-            continue;
-        }
-
-        // Start // comment?
-        inCommentSingle = inCommentSingle || ((prevChar == "/") && (currChar == "/") && !inStrDouble && !inStrSingle && !inComment && !justExitedComment && !inStrBackTick);
-        // Could have falsely jumped out of a /**/ comment if it contains a //.
-        if ((prevChar == "/") && (currChar == "/") && !inComment && justExitedComment) {
-            inComment = true;
-            justExitedComment = false;
-            continue
-        }
-        justExitedComment = false;
-        
-        // In // comment?
-        if (inCommentSingle) {
-
-            // Not in a regex if we are in a '// ...' comment.
-            inRegex = false;
-
-            // Save comment text unmodified.
-            r += currChar;
-
-            // Out of comment?
-            if ((currChar == "\n") || (currChar == "\r")) {
-                inCommentSingle = false;
-            }
-
-            // Keep going until we leave the comment.
-            if (currChar != " ") {
-                prevPrevChar = prevChar;
-                prevChar = currChar;
-            }
-            continue;
-        }
-
-        // Start /.../ regex expression?
-        oldInRegex = inRegex;
-        // Assume that regex expressions can't be preceded by ')' or
-        // an alphanumeric character. This is to try to tell divisiion
-        // from the start of a regex.
-        inRegex = inRegex || ((prevChar != "/") && (prevChar != ")") && !isAlphaNumeric(prevChar) &&
-                              (currChar == "/") && !inStrDouble && !inStrSingle && !inComment && !inCommentSingle && !inStrBackTick);
-        
-        // In /.../ regex expression?
-        if (inRegex) {
-
-            // Save regex unmodified.
-            r += currChar;
-
-            // In character set (square brackets)?
-            if (currChar == "[") inSquareBrackets = true;
-            if (currChar == "]") inSquareBrackets = false;
-            
-            // Out of regex?
-            //
-            // Unescaped '/' can appear in a regex (nice). Try to
-            // guess whether the '/' actually ends the regex based on
-            // the char after the '/'. Add chars that CANNOT appear
-            // after a regex def as needed.
-            //
-            // ex. var f=/[!"#$%&'()*+,/\\:;<=>?@[\]^`{|}~]/g;
-            if (!justStartedRegex &&
-                !inSquareBrackets &&
-                (prevPrevChar != "\\") &&
-                (prevChar == "/") &&
-                ((slashSubstr.length % 2) == 0) &&
-                ("\\:[]?".indexOf(currChar) == -1)) {
-                inRegex = false;
-            }
-
-            // Track seeing the '/' starting the regex.
-            justStartedRegex = !oldInRegex;
-            
-            // Keep going until we leave the regex.
-            if (currChar != " ") {
-                prevPrevChar = prevChar;
-                prevChar = currChar;
-            }
-            if (resetSlashes) prevChar = " ";
-            resetSlashes = false;
-            continue;
-        }
-        
-        // Looking at an escaped back slash (1 char back)?
-        escapedSlash = (prevChar == "\\" && prevPrevChar == "\\");
-        
-        // Start/end single quoted string?
-        if ((currChar == "'") &&
-            ((prevChar != "\\") || ((prevChar == "\\") && ((slashSubstr.length % 2) == 0) && inStrSingle)) &&
-            !inStrDouble && !inStrBackTick) {
-
-            // Switch being in/out of string.
-            inStrSingle = !inStrSingle;
-
-            // Finished up a string we were tracking?
-            if (!inStrSingle) {
-                currStr += "'";
-                const strName = "HIDE_" + counter++;
-                allStrs[strName] = currStr;
-                r += strName;
-                skip = true;
-            }
-            else {
-                currStr = "";
-            }
-        };
-
-        // Start/end double quoted string?
-        if ((currChar == '"') &&
-            ((prevChar != "\\") || ((prevChar == "\\") && ((slashSubstr.length % 2) == 0) && inStrDouble)) &&
-            !inStrSingle && !inStrBackTick && !inCommentSingle && !inComment && !inRegex) {
-
-            // Switch being in/out of string.
-            inStrDouble = !inStrDouble;
-
-            // Finished up a string we were tracking?
-            if (!inStrDouble) {
-                currStr += '"';
-                const strName = "HIDE_" + counter++;
-                allStrs[strName] = currStr;
-                r += strName;
-                skip = true;
-            }
-            else {
-                currStr = "";
-            }
-        };
-
-        // Start/end backtick quoted string?
-        if ((currChar == '`') &&
-            ((prevChar != "\\") || ((prevChar == "\\") && escapedSlash && !prevEscapedSlash && inStrBackTick)) &&
-            !inStrSingle && !inStrDouble && !inCommentSingle && !inComment && !inRegex) {
-
-            // Switch being in/out of string.
-            inStrBackTick = !inStrBackTick;
-
-            // Finished up a string we were tracking?
-            if (!inStrBackTick) {
-                currStr += '`';
-                const strName = "HIDE_" + counter++;
-                allStrs[strName] = currStr;
-                r += strName;
-                skip = true;
-            }
-            else {
-                currStr = "";
-            }
-        };
-
-        // Save the current character if we are tracking a string.
-        if (inStrDouble || inStrSingle || inStrBackTick) {
-            currStr += currChar;
-        }
-
-        // Not in a string. Just save the original character in the
-        // result string.
-        else if (!skip) {
-            r += currChar;
-        };
-        skip = false;
-
-        // Track what is now the previous character so we can handle
-        // escaped quotes in strings.
-        prevPrevChar = prevChar;
-        if (currChar != " ") prevChar = currChar;
-        if (resetSlashes) prevChar = " ";
-        resetSlashes = false;
-        prevEscapedSlash = escapedSlash;
+  // Use reliable comment stripping with strip-comments library
+  // NOTE: stripComments() can sometimes break valid JS (e.g., strings containing "//")
+  // Try it first, but fall back to original code if it breaks parsing
+  // Run in a child process with timeout to avoid hanging on large files.
+  /* Default to a slice of --timeout, not all of it. Comment stripping,
+   * preprocessing and emulation share one budget; letting any single stage
+   * claim the whole thing means a multi-MB sample is killed before a single
+   * IOC is logged. Callers can still override explicitly. Declared outside
+   * the try so the timeout handler below can report it. */
+  const stripTimeout = (argv["strip-timeout"] || Math.min((argv.timeout || 10) / 6, 10)) * 1000;
+  try {
+    const { execFileSync } = require("child_process");
+    const childScript = `
+      const fs = require("fs");
+      const code = fs.readFileSync(process.argv[1], "utf8");
+      const stripComments = require("strip-comments");
+      const acorn = require("acorn");
+      const stripped = stripComments(code);
+      acorn.parse(stripped, { ecmaVersion: "latest", allowReturnOutsideFunction: true });
+      process.stdout.write(stripped);
+    `;
+    const osTmp = require("os");
+    const pathTmp = require("path");
+    const tmpFile = pathTmp.join(osTmp.tmpdir(), "boxjs-strip-" + process.pid + ".js");
+    require("fs").writeFileSync(tmpFile, s);
+    try {
+      s = execFileSync("node", ["-e", childScript, tmpFile], {
+        timeout: stripTimeout,
+        maxBuffer: 1024 * 1024 * 50,
+        encoding: "utf8",
+      });
+    } finally {
+      try { require("fs").unlinkSync(tmpFile); } catch (_) {}
     }
-    //console.log(JSON.stringify([prevPrevChar, prevChar, currChar, inStrDouble, inStrSingle, inCommentSingle, inComment, inRegex, slashSubstr, justExitedComment]))
-    return [r, allStrs];
+  } catch (e) {
+    if (e.killed || e.signal === "SIGTERM") {
+      lib.warning(`Comment stripping timed out after ${stripTimeout / 1000}s, skipping.`);
+    }
+    // stripComments broke the code, timed out, or code was already invalid
+    // Continue with original code - manual comment tracking below will handle it
+  }
+
+  // For debugging.
+  var window = "               ";
+  // Special case. Regex uses like '/.../["test"]' are really hard
+  // to deal with. Hide all '["test"]' instances.
+  var tmpName = "HIDE_" + counter++;
+  s = s.replace(/\["test"\]/g, tmpName);
+  allStrs[tmpName] = '["test"]';
+  tmpName = "HIDE_" + counter++;
+  s = s.replace(/\['test'\]/g, tmpName);
+  allStrs[tmpName] = "['test']";
+  // Similar to the above, obfuscator.io constructs like
+  // '/.../[0x_fff(' are also really hard to deal with. Replace
+  // those also.
+  tmpName = "HIDE_" + counter++;
+  // Ony match exprs that start with the '/' and keep the '/' in the
+  // code to close out the regex. We are doing this because
+  // Replacement name must start with HIDE_.
+  s = s.replace(/\/\[_0x/g, "/" + tmpName);
+  allStrs[tmpName] = "[_0x";
+  //console.log("prevprev,prev,curr,dbl,single,commsingl,comm,regex,oldinregex,slash,justexitcom");
+  for (let i = 0; i < s.length; i++) {
+    // Track consecutive backslashes. We use this to tell if the
+    // current back slash has been escaped (even # of backslashes)
+    // or is escaping the next character (odd # of slashes).
+    if (prevChar == "\\" && slashSubstr.length == 0) {
+      slashSubstr = "\\";
+    } else if (prevChar == "\\" && slashSubstr.length > 0) {
+      slashSubstr += "\\";
+    } else if (prevChar != "\\") {
+      slashSubstr = "";
+    }
+    // Backslash escaping gets 'reset' when hitting a space.
+    var currChar = s[i];
+    if (currChar == " " && slashSubstr) {
+      slashSubstr = "";
+      resetSlashes = true;
+    }
+    // Debugging.
+    //window = window.slice(1,) + currChar;
+    //console.log(window);
+
+    // Comment detection for remaining edge cases
+    var oldInComment = inComment;
+    inComment =
+      inComment ||
+      (prevChar == "/" &&
+        currChar == "*" &&
+        !inStrDouble &&
+        !inStrSingle &&
+        !inCommentSingle &&
+        !inStrBackTick &&
+        (!inRegex || !oldInRegex));
+
+    // In /* */ comment? (Should be rare now after preprocessing)
+    if (inComment) {
+      // Skip comment content
+      if (oldInComment != inComment) {
+        inRegex = false;
+        r = r.slice(0, -1);
+      }
+
+      // Out of comment?
+      if (prevChar == "*" && currChar == "/") {
+        inComment = false;
+        justExitedComment = true;
+        skippedSpace = false;
+      }
+
+      // Keep going until we leave the comment
+      if (currChar != " ") {
+        prevPrevChar = prevChar;
+        prevChar = currChar;
+      } else {
+        skippedSpace = true;
+      }
+      continue;
+    }
+
+    // Single line comments should also be mostly handled, but keep basic detection
+    inCommentSingle =
+      inCommentSingle ||
+      (prevChar == "/" &&
+        currChar == "/" &&
+        !inStrDouble &&
+        !inStrSingle &&
+        !inComment &&
+        !justExitedComment &&
+        !inStrBackTick);
+
+    if (prevChar == "/" && currChar == "/" && !inComment && justExitedComment) {
+      inComment = true;
+      justExitedComment = false;
+      continue;
+    }
+    justExitedComment = false;
+
+    // In // comment?
+    if (inCommentSingle) {
+      inRegex = false;
+      r += currChar;
+
+      // Out of comment?
+      if (currChar == "\n" || currChar == "\r") {
+        inCommentSingle = false;
+      }
+
+      if (currChar != " ") {
+        prevPrevChar = prevChar;
+        prevChar = currChar;
+      }
+      continue;
+    }
+
+    // Start /.../ regex expression?
+    oldInRegex = inRegex;
+    // Assume that regex expressions can't be preceded by ')' or
+    // an alphanumeric character. This is to try to tell divisiion
+    // from the start of a regex.
+    inRegex =
+      inRegex ||
+      (prevChar != "/" &&
+        prevChar != ")" &&
+        !isAlphaNumeric(prevChar) &&
+        currChar == "/" &&
+        !inStrDouble &&
+        !inStrSingle &&
+        !inComment &&
+        !inCommentSingle &&
+        !inStrBackTick);
+
+    // In /.../ regex expression?
+    if (inRegex) {
+      // Save regex unmodified.
+      r += currChar;
+
+      // In character set (square brackets)?
+      if (currChar == "[") inSquareBrackets = true;
+      if (currChar == "]") inSquareBrackets = false;
+
+      // Out of regex?
+      //
+      // Unescaped '/' can appear in a regex (nice). Try to
+      // guess whether the '/' actually ends the regex based on
+      // the char after the '/'. Add chars that CANNOT appear
+      // after a regex def as needed.
+      //
+      // ex. var f=/[!"#$%&'()*+,/\\:;<=>?@[\]^`{|}~]/g;
+      if (
+        !justStartedRegex &&
+        !inSquareBrackets &&
+        prevChar == "/" &&
+        slashSubstr.length % 2 == 0 &&
+        "\\:[]?".indexOf(currChar) == -1
+      ) {
+        inRegex = false;
+      }
+
+      // Track seeing the '/' starting the regex.
+      justStartedRegex = !oldInRegex;
+
+      // Keep going until we leave the regex.
+      if (currChar != " ") {
+        prevPrevChar = prevChar;
+        prevChar = currChar;
+      }
+      if (resetSlashes) prevChar = " ";
+      resetSlashes = false;
+      continue;
+    }
+
+    // Looking at an escaped back slash (1 char back)?
+    escapedSlash = prevChar == "\\" && prevPrevChar == "\\";
+
+    // Start/end single quoted string?
+    if (
+      currChar == "'" &&
+      (prevChar != "\\" ||
+        (prevChar == "\\" && slashSubstr.length % 2 == 0 && inStrSingle)) &&
+      !inStrDouble &&
+      !inStrBackTick
+    ) {
+      // Switch being in/out of string.
+      inStrSingle = !inStrSingle;
+
+      // Finished up a string we were tracking?
+      if (!inStrSingle) {
+        currStr += "'";
+        const strName = "HIDE_" + counter++;
+        allStrs[strName] = currStr;
+        r += strName;
+        skip = true;
+      } else {
+        currStr = "";
+      }
+    }
+
+    // Start/end double quoted string?
+    if (
+      currChar == '"' &&
+      (prevChar != "\\" ||
+        (prevChar == "\\" && slashSubstr.length % 2 == 0 && inStrDouble)) &&
+      !inStrSingle &&
+      !inStrBackTick &&
+      !inCommentSingle &&
+      !inComment &&
+      !inRegex
+    ) {
+      // Switch being in/out of string.
+      inStrDouble = !inStrDouble;
+
+      // Finished up a string we were tracking?
+      if (!inStrDouble) {
+        currStr += '"';
+        const strName = "HIDE_" + counter++;
+        allStrs[strName] = currStr;
+        r += strName;
+        skip = true;
+      } else {
+        currStr = "";
+      }
+    }
+
+    // Start/end backtick quoted string?
+    if (
+      currChar == "`" &&
+      (prevChar != "\\" ||
+        (prevChar == "\\" &&
+          escapedSlash &&
+          !prevEscapedSlash &&
+          inStrBackTick)) &&
+      !inStrSingle &&
+      !inStrDouble &&
+      !inCommentSingle &&
+      !inComment &&
+      !inRegex
+    ) {
+      // Switch being in/out of string.
+      inStrBackTick = !inStrBackTick;
+
+      // Finished up a string we were tracking?
+      if (!inStrBackTick) {
+        currStr += "`";
+        const strName = "HIDE_" + counter++;
+        allStrs[strName] = currStr;
+        r += strName;
+        skip = true;
+      } else {
+        currStr = "";
+      }
+    }
+
+    // Save the current character if we are tracking a string.
+    if (inStrDouble || inStrSingle || inStrBackTick) {
+      currStr += currChar;
+    }
+
+    // Not in a string. Just save the original character in the
+    // result string.
+    else if (!skip) {
+      r += currChar;
+    }
+    skip = false;
+
+    // Track what is now the previous character so we can handle
+    // escaped quotes in strings.
+    prevPrevChar = prevChar;
+    if (currChar != " ") prevChar = currChar;
+    if (resetSlashes) prevChar = " ";
+    resetSlashes = false;
+    prevEscapedSlash = escapedSlash;
+  }
+  //console.log(JSON.stringify([prevPrevChar, prevChar, currChar, inStrDouble, inStrSingle, inCommentSingle, inComment, inRegex, slashSubstr, justExitedComment]))
+  return [r, allStrs];
 }
 
 function unhideStrs(s, map) {
+  // Replace each HIDE_NNNN with the hidden string.
+  var oldPos = 0;
+  var currPos = s.indexOf("HIDE_");
+  var r = "";
+  var done = currPos < 0;
+  while (!done) {
+    // Add in the previous non-hidden string contents.
+    r += s.slice(oldPos, currPos);
 
-    // Replace each HIDE_NNNN with the hidden string.
-    var oldPos = 0;
-    var currPos = s.indexOf("HIDE_");
-    var r = "";
-    var done = (currPos < 0);
-    while (!done) {
+    // Pull out the name of the hidden string.
+    var tmpPos = currPos + "HIDE_".length + 7;
 
-        // Add in the previous non-hidden string contents.
-        r += s.slice(oldPos, currPos);
+    // Get the original string.
+    var hiddenName = s.slice(currPos, tmpPos);
+    var origVal = map[hiddenName];
 
-        // Pull out the name of the hidden string.
-        var tmpPos = currPos + "HIDE_".length + 7;
+    // Add in the unhidden string.
+    r += origVal;
 
-        // Get the original string.
-        var hiddenName = s.slice(currPos, tmpPos);        
-        var origVal = map[hiddenName];
-        
-        // Add in the unhidden string.
-        r += origVal;
+    // Move to the next string to unhide.
+    oldPos = tmpPos;
+    currPos = s.slice(tmpPos).indexOf("HIDE_");
+    done = currPos < 0;
+    currPos = tmpPos + currPos;
+  }
 
-        // Move to the next string to unhide.
-        oldPos = tmpPos;
-        currPos = s.slice(tmpPos).indexOf("HIDE_");
-        done = (currPos < 0);
-        currPos = tmpPos + currPos;
-    }
+  // Add in remaining original string that had nothing hidden.
+  r += s.slice(tmpPos);
 
-    // Add in remaining original string that had nothing hidden.
-    r += s.slice(tmpPos);
-    
-    // Done.
-    return r;
+  // Done.
+  return r;
 }
 
 // JScript lets you stick the actual code to run in a conditional
 // comment like '/*@if(@_jscript_version >= 4)....*/'. If there,
 // extract that code out.
 function extractCode(code) {
-
-    // See if we can pull code out from conditional comments.
-    // /*@if(@_jscript_version >= 4) ... @else @*/
-    // /*@if(1) ... @end@*/
-    //
-    // /*@cc_on
-    // @if(1) ... @end@*/
-    //
-    // /*@cc_on @*//*@if (1)    
-    // ... @end @*/
-    const commentPat = /\/\*(?:@cc_on\s+)?@if\s*\([^\)]+\)(.+?)@(else|end)\s*@\s*\*\//s
-    var codeMatch = code.match(commentPat);
+  // See if we can pull code out from conditional comments.
+  // /*@if(@_jscript_version >= 4) ... @else @*/
+  // /*@if(1) ... @end@*/
+  //
+  // /*@cc_on
+  // @if(1) ... @end@*/
+  //
+  // /*@cc_on @*//*@if (1)
+  // ... @end @*/
+  const commentPat =
+    /\/\*(?:@cc_on\s+)?@if\s*\([^\)]+\)(.+?)@(else|end)\s*@\s*\*\//s;
+  var codeMatch = code.match(commentPat);
+  if (!codeMatch) {
+    const commentPat1 =
+      /\/\*\s*@cc_on\s*@\*\/\s*\/\*\s*@if\s*\([^\)]+\)(.+?)@(else|end)\s*@\s*\*\//s;
+    codeMatch = code.match(commentPat1);
     if (!codeMatch) {
-        const commentPat1 = /\/\*\s*@cc_on\s*@\*\/\s*\/\*\s*@if\s*\([^\)]+\)(.+?)@(else|end)\s*@\s*\*\//s;
-        codeMatch = code.match(commentPat1);
+      // /*@cc_on\n...@*/
+      const commentPat2 = /\/\*\s*@cc_on *\r?\n(.+?)\r?\n@\*\//;
+      codeMatch = code.match(commentPat2);
+      if (!codeMatch) {
+        // //@cc_on ... @*/
+        const commentPat3 = /\/\/\s*@cc_on(.+?)@\*\//;
+        codeMatch = code.match(commentPat3);
         if (!codeMatch) {
             // /*@cc_on\n...@*/
             const commentPat2 = /\/\*\s*@cc_on *\r?\n(.+?)\r?\n@\*\//;
@@ -447,10 +789,12 @@ function extractCode(code) {
                 }
             }
         }
+      }
     }
-    var r = codeMatch[1];
-    lib.info("Extracted code to analyze from conditional JScript comment.");
-    return r;
+  }
+  var r = codeMatch[1];
+  lib.info("Extracted code to analyze from conditional JScript comment.");
+  return r;
 }
 
 function rewrite_returns(code) {
@@ -467,9 +811,15 @@ function rewrite(code, useException=false) {
     // modify the control flow?
     if (argv["ignore-returns"]) code = rewrite_returns(code);
     
-    // Don't rewrite huge samples. Cap at 5MB.
-    if (code.length > 5e+6) {
-        lib.info("Sample too large. Not rewriting.");
+    /* Don't rewrite huge samples. Rewriting is a blocking acorn +
+     * escodegen pass whose cost grows with sample size, and it shares
+     * the single --timeout budget with emulation: on a multi-MB sample
+     * it routinely burns the whole budget before a single IOC is
+     * logged, so the analysis is killed with nothing to show.
+     */
+    const rewriteMaxSize = argv["rewrite-max-size"] || 1e+6;
+    if (code.length > rewriteMaxSize) {
+        lib.info(`Sample is ${code.length} bytes (over the ${rewriteMaxSize} byte --rewrite-max-size). Not rewriting.`);
         return code;
     }
     lib.verbose("Rewriting code...", false);
@@ -520,14 +870,10 @@ function rewrite(code, useException=false) {
     // Don't do this for huge samples.
     if (code.length < 2e6) {
         var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
-        var rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[;]))/g;
-        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
-        //code = code.toString().replace(rvaluePat, ';/* ASSIGNING TO RVALUE */');
+        code = code.toString().replace(rvaluePat, ";/* ASSIGNING TO RVALUE */");
 
         rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
-        rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[\n]))/g;
-        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
-        //code = code.toString().replace(rvaluePat, ';// ASSIGNING TO RVALUE');
+        code = code.toString().replace(rvaluePat, ";// ASSIGNING TO RVALUE");
 
         //console.log("!!!! CODE: 2 !!!!");
         //console.log(code);                
@@ -691,7 +1037,12 @@ cc decoder.c -o decoder
             lib.verbose(`    Preprocessing with uglify-es v${require("uglify-es/package.json").version} (remove --preprocess to skip)...`, false);
             const unsafe = !!argv["unsafe-preprocess"];
             lib.debug("Unsafe preprocess: " + unsafe);
-            const result = require("uglify-es").minify(code, {
+            /* uglify on a large sample can run for minutes. Run it in a child
+             * process so --preprocess-timeout can cap it without taking the
+             * whole analysis down with it. */
+            // Same reasoning as --strip-timeout: a slice of the budget, not all of it.
+            const preprocessTimeout = (argv["preprocess-timeout"] || Math.min((argv.timeout || 10) / 4, 15)) * 1000;
+            const uglifyOptions = {
                 parse: {
                     bare_returns: true, // used when rewriting function bodies
                 },
@@ -737,11 +1088,42 @@ cc decoder.c -o decoder
                     beautify: true,
                     comments: true,
                 },
-            });
-            if (result.error) {
-                lib.error("Couldn't preprocess with uglify-es: " + JSON.stringify(result.error));
-            } else {
-                code = result.code;
+            };
+            try {
+                const { execFileSync } = require("child_process");
+                const childScript = `
+                    const fs = require("fs");
+                    const opts = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                    const code = fs.readFileSync(process.argv[2], "utf8");
+                    const result = require(${JSON.stringify(require.resolve("uglify-es"))}).minify(code, opts);
+                    if (result.error) {
+                        process.stderr.write(JSON.stringify(result.error));
+                        process.exit(1);
+                    }
+                    process.stdout.write(result.code);
+                `;
+                const tmpOpts = path.join(os.tmpdir(), `boxjs-uglify-opts-${process.pid}.json`);
+                const tmpCode = path.join(os.tmpdir(), `boxjs-uglify-code-${process.pid}.js`);
+                fs.writeFileSync(tmpOpts, JSON.stringify(uglifyOptions));
+                fs.writeFileSync(tmpCode, code);
+                try {
+                    code = execFileSync("node", ["-e", childScript, tmpOpts, tmpCode], {
+                        timeout: preprocessTimeout,
+                        maxBuffer: 1024 * 1024 * 50,
+                        encoding: "utf8",
+                    });
+                } finally {
+                    try { fs.unlinkSync(tmpOpts); } catch (_) {}
+                    try { fs.unlinkSync(tmpCode); } catch (_) {}
+                }
+            } catch (e) {
+                if (e.killed || e.signal === "SIGTERM") {
+                    lib.warning(`Preprocessing timed out after ${preprocessTimeout / 1000}s, skipping.`);
+                } else if (e.status === 1 && e.stderr) {
+                    lib.error("Couldn't preprocess with uglify-es: " + e.stderr);
+                } else {
+                    lib.warning("Preprocessing skipped: " + e.message);
+                }
             }
         }
 
@@ -939,75 +1321,77 @@ if (argv["check"]) {
 
 // Extract the actual code to analyze from conditional JScript
 // comments if needed.
-if (argv["extract-conditional-code"]) {
-    code = extractCode(code);
+if (false && argv["extract-conditional-code"]) {
+  code = extractCode(code);
 }
 
 // Track if we are throttling large/frequent file writes.
 if (argv["throttle-writes"]) {
-    lib.throttleFileWrites(true);
-};
+  lib.throttleFileWrites(true);
+}
 
 // Track if we are throttling frequent command executions.
 if (argv["throttle-commands"]) {
-    lib.throttleCommands(true);
-};
+  lib.throttleCommands(true);
+}
 
 // Rewrite the code if needed.
 code = rewrite(code);
 
 // prepend extra JS containing mock objects in the given file(s) onto the code
 if (argv["prepended-code"]) {
+  var prependedCode = "";
+  var files = [];
 
-    var prependedCode = ""
-    var files = []
-
-    // get all the files in the directory and sort them alphebetically
-    var isDir = false;
-    try {
-        isDir = fs.lstatSync(argv["prepended-code"]).isDirectory();
+  // get all the files in the directory and sort them alphebetically
+  var isDir = false;
+  try {
+    isDir = fs.lstatSync(argv["prepended-code"]).isDirectory();
+  } catch (e) {}
+  if (isDir) {
+    dir_files = fs.readdirSync(argv["prepended-code"]);
+    for (var i = 0; i < dir_files.length; i++) {
+      files.push(path.join(argv["prepended-code"], dir_files[i]));
     }
-    catch (e) {}
-    if (isDir) {
 
-        dir_files = fs.readdirSync(argv["prepended-code"]);
-        for (var i = 0; i < dir_files.length; i++) {
-            files.push(path.join(argv["prepended-code"], dir_files[i]))
-        }
-
-        // make sure we're adding mock code in the right order
-        files.sort()
+    // make sure we're adding mock code in the right order
+    files.sort();
+  } else {
+    // Use default boilerplate code?
+    if (argv["prepended-code"] == "default") {
+      const defaultBP = __dirname + "/boilerplate.js";
+      files.push(defaultBP);
     } else {
-        
-        // Use default boilerplate code?
-        if (argv["prepended-code"] == "default") {
-            const defaultBP = __dirname + "/boilerplate.js";
-            files.push(defaultBP);
-        }
-        else {
-            files.push(argv["prepended-code"]);
-        }
+      files.push(argv["prepended-code"]);
     }
+  }
 
-    for (var i = 0; i < files.length; i++) {
-        prependedCode += fs.readFileSync(files[i], 'utf-8') + "\n\n"
-    }
+  for (var i = 0; i < files.length; i++) {
+    prependedCode += fs.readFileSync(files[i], "utf-8") + "\n\n";
+  }
 
-    // Add in require() override code so that stubbed versions of some
-    // packages can be loaded via require().
-    const requireOverride = fs.readFileSync(path.join(__dirname, "require_override.js"), "utf8")
-    code = "const _origRequire = require;\n{" + requireOverride + "\n\n" + code + "\n}";
+  // Add in require() override code so that stubbed versions of some
+  // packages can be loaded via require().
+  const requireOverride = fs.readFileSync(
+    path.join(__dirname, "require_override.js"),
+    "utf8"
+  );
+  code =
+    "const _origRequire = require;\n{" +
+    requireOverride +
+    "\n\n" +
+    code +
+    "\n}";
 
-    // Add in prepended code.
-    code = prependedCode + "\n\n" + code
+  // Add in prepended code.
+  code = prependedCode + "\n\n" + code;
 }
 
 // prepend patch code, unless it is already there.
 if (!code.includes("let __PATCH_CODE_ADDED__ = true;")) {
-    code = fs.readFileSync(path.join(__dirname, "patch.js"), "utf8") + code;
-}
-else {
-    console.log("Patch code already added.");
+  code = fs.readFileSync(path.join(__dirname, "patch.js"), "utf8") + code;
+} else {
+  console.log("Patch code already added.");
 }
 
 // append more code
@@ -1015,14 +1399,14 @@ code += "\n\n" + fs.readFileSync(path.join(__dirname, "appended-code.js"));
 
 lib.logJS(code);
 
-Array.prototype.Count = function() {
-    return this.length;
+Array.prototype.Count = function () {
+  return this.length;
 };
 
 // Set the fake scripting engine to report.
-var fakeEngineShort = "wscript.exe"
+var fakeEngineShort = "wscript.exe";
 if (argv["fake-script-engine"]) {
-    fakeEngineShort = argv["fake-script-engine"];
+  fakeEngineShort = argv["fake-script-engine"];
 }
 var fakeEngineFull = "C:\\WINDOWS\\System32\\" + fakeEngineShort;
 
@@ -1030,55 +1414,63 @@ var fakeEngineFull = "C:\\WINDOWS\\System32\\" + fakeEngineShort;
 // option. "''" is an empty string argument.
 var commandLineArgs = [];
 if (argv["fake-cl-args"]) {
-    const tmpArgs = argv["fake-cl-args"].split(",");
-    for (var arg of tmpArgs) {
-        if (arg == "''") arg = "";
-        commandLineArgs.push(arg);
-    }
+  const tmpArgs = argv["fake-cl-args"].split(",");
+  for (var arg of tmpArgs) {
+    if (arg == "''") arg = "";
+    commandLineArgs.push(arg);
+  }
 }
 
 // Fake sample file name can be set with the --fake-sample-name option.
 var sampleName = "CURRENT_SCRIPT_IN_FAKED_DIR.js";
-var sampleFullName = "C:\Users\\Sysop12\\AppData\\Roaming\\Microsoft\\Templates\\" + sampleName;
+var sampleFullName =
+  "C:Users\\Sysop12\\AppData\\Roaming\\Microsoft\\Templates\\" + sampleName;
 if (argv["fake-sample-name"]) {
-
-    // Sample name with full path?
-    var dirChar = undefined;
-    if (argv["fake-sample-name"].indexOf("\\") >= 0) {
-        dirChar = "\\";
-    }
-    if (argv["fake-sample-name"].indexOf("/") >= 0) {
-        dirChar = "/";
-    }
-    if (dirChar) {
-
-        // Break out the immediate sample name and full name.
-        sampleName = argv["fake-sample-name"].slice(argv["fake-sample-name"].lastIndexOf(dirChar) + 1);
-        sampleFullName = argv["fake-sample-name"];
-    }
-    else {
-        sampleName = argv["fake-sample-name"];
-        sampleFullName = "C:\Users\\Sysop12\\AppData\\Roaming\\Microsoft\\Templates\\" + sampleName;
-    }
-    lib.logIOC("Sample Name",
-               {"sample-name": sampleName, "sample-name-full": sampleFullName},
-               "Using fake sample file name " + sampleFullName + " when analyzing.");
-}
-else if (argv["real-script-name"]) {
-    sampleName = path.basename(filename);
-    sampleFullName = filename;
-    lib.logIOC("Sample Name",
-               {"sample-name": sampleName, "sample-name-full": sampleFullName},
-               "Using real sample file name " + sampleFullName + " when analyzing.");
-}
-else {
-    lib.logIOC("Sample Name",
-               {"sample-name": sampleName, "sample-name-full": sampleFullName},
-               "Using standard fake sample file name " + sampleFullName + " when analyzing.");
+  // Sample name with full path?
+  var dirChar = undefined;
+  if (argv["fake-sample-name"].indexOf("\\") >= 0) {
+    dirChar = "\\";
+  }
+  if (argv["fake-sample-name"].indexOf("/") >= 0) {
+    dirChar = "/";
+  }
+  if (dirChar) {
+    // Break out the immediate sample name and full name.
+    sampleName = argv["fake-sample-name"].slice(
+      argv["fake-sample-name"].lastIndexOf(dirChar) + 1
+    );
+    sampleFullName = argv["fake-sample-name"];
+  } else {
+    sampleName = argv["fake-sample-name"];
+    sampleFullName =
+      "C:Users\\Sysop12\\AppData\\Roaming\\Microsoft\\Templates\\" + sampleName;
+  }
+  lib.logIOC(
+    "Sample Name",
+    { "sample-name": sampleName, "sample-name-full": sampleFullName },
+    "Using fake sample file name " + sampleFullName + " when analyzing."
+  );
+} else if (argv["real-script-name"]) {
+  sampleName = path.basename(filename);
+  sampleFullName = filename;
+  lib.logIOC(
+    "Sample Name",
+    { "sample-name": sampleName, "sample-name-full": sampleFullName },
+    "Using real sample file name " + sampleFullName + " when analyzing."
+  );
+} else {
+  lib.logIOC(
+    "Sample Name",
+    { "sample-name": sampleName, "sample-name-full": sampleFullName },
+    "Using standard fake sample file name " +
+      sampleFullName +
+      " when analyzing."
+  );
 }
 
 // Fake up the WScript object for Windows JScript.
-var wscript_proxy = new Proxy({
+var wscript_proxy = new Proxy(
+  {
     arguments: new Proxy((n) => commandLineArgs[n], {
         get: function(target, name) {
             name = name.toString().toLowerCase();
@@ -1116,230 +1508,1501 @@ var wscript_proxy = new Proxy({
     scriptfullname: sampleFullName,
     scriptname: sampleName,
     timeout: 0,
-    quit: function() {        
-        lib.logIOC("WScript", "Quit()", "The sample explicitly called WScript.Quit().");
-        //console.trace()
-        if ((!argv["ignore-wscript-quit"]) || lib.doWscriptQuit()) {
-            process.exit(0);
-        }
+    quit: function () {
+      lib.logIOC(
+        "WScript",
+        "Quit()",
+        "The sample explicitly called WScript.Quit()."
+      );
+      //console.trace()
+      if (!argv["ignore-wscript-quit"] || lib.doWscriptQuit()) {
+        process.exit(0);
+      }
     },
     get stderr() {
-        lib.error("WScript.StdErr not implemented");
+      lib.error("WScript.StdErr not implemented");
     },
     get stdin() {
-        lib.error("WScript.StdIn not implemented");
+      lib.error("WScript.StdIn not implemented");
     },
     get stdout() {
-        lib.error("WScript.StdOut not implemented");
+      lib.error("WScript.StdOut not implemented");
     },
     version: "5.8",
     get connectobject() {
-        lib.error("WScript.ConnectObject not implemented");
+      lib.error("WScript.ConnectObject not implemented");
     },
     createobject: ActiveXObject,
     get disconnectobject() {
-        lib.error("WScript.DisconnectObject not implemented");
+      lib.error("WScript.DisconnectObject not implemented");
     },
     echo() {},
     get getobject() {
-        lib.error("WScript.GetObject not implemented");
+      lib.error("WScript.GetObject not implemented");
     },
     // Note that Sleep() is implemented in patch.js because it requires
     // access to the variable _globalTimeOffset, which belongs to the script
     // and not to the emulator.
     [Symbol.toPrimitive]: () => "Windows Script Host",
     tostring: "Windows Script Host",
-}, {
+  },
+  {
     get(target, prop) {
-        // For whatever reasons, WScript.* properties are case insensitive.
-        if (typeof prop === "string")
-            prop = prop.toLowerCase();
-        return target[prop];
-    }
-});
+      // For whatever reasons, WScript.* properties are case insensitive.
+      if (typeof prop === "string") prop = prop.toLowerCase();
+      return target[prop];
+    },
+  }
+);
 
 const sandbox = {
-    saveAs : function(data, fname) {
-        // TODO: If Blob need to extract the data.
-        lib.writeFile(fname, data);
+  // Inject lib for sandbox functions to use
+  lib: lib,
+  // Proxy for Components.classes - created here in host context because
+  // vm2 >=3.10.4 disables Proxy inside the sandbox to prevent escape via
+  // handler leakage. Boilerplate.js references this as __componentClassesProxy.
+  __componentClassesProxy: new Proxy({}, {
+    get: (target, name) => {
+      // Returns a stubbed component class for any property access.
+      // The actual _fakeComponentClass is defined in boilerplate.js,
+      // so return a minimal stub here; boilerplate.js will override
+      // Components.classes with the full version if available.
+      return {
+        getService: function() {
+          return {
+            getCharPref: function() {},
+            setCharPref: function() {},
+            newURI: function(url) {
+              lib.logUrl('Components.classes["..."].getService().newURI()', url);
+            },
+            getCodebasePrincipal: function() {},
+            getLocalStorageForPrincipal: function() {},
+          };
+        },
+      };
+    }
+  }),
+  // Mock event object for browser compatibility - uses Proxy for dynamic event types
+  event: new Proxy(
+    {
+      type: "load", // default type, can be overridden
+      target: null,
+      currentTarget: null,
+      bubbles: false,
+      cancelable: false,
+      defaultPrevented: false,
+      preventDefault: function () {
+        lib.verbose("event.preventDefault() called");
+        this.defaultPrevented = true;
+      },
+      stopPropagation: function () {
+        lib.verbose("event.stopPropagation() called");
+      },
+      stopImmediatePropagation: function () {
+        lib.verbose("event.stopImmediatePropagation() called");
+      },
     },
-    setInterval : function() {},
-    setTimeout : function(func, time) {
+    {
+      get(target, prop) {
+        // Log access to event properties for analysis
+        if (prop === "type" && target[prop]) {
+          lib.verbose(`event.type accessed: ${target[prop]}`);
+        } else if (
+          typeof prop === "string" &&
+          prop !== "constructor" &&
+          prop !== "toString" &&
+          prop !== "valueOf"
+        ) {
+          lib.verbose(`event.${prop} accessed`);
+        }
 
-        // The interval should be an int, so do a basic check for int.
-        if ((typeof(time) !== "number") || (time == null)) {
-            throw("time is not a number.");
+        // Return the property if it exists, otherwise return reasonable defaults
+        if (prop in target) {
+          return target[prop];
         }
-        
-        // Just call the function immediately, no waiting.
-        if (typeof(func) === "function") {
-            func();
+
+        // Provide sensible defaults for common event properties
+        switch (prop) {
+          case "timeStamp":
+            return Date.now();
+          case "isTrusted":
+            return true;
+          case "eventPhase":
+            return 2; // AT_TARGET phase
+          case "srcElement":
+            return target.target;
+          case "returnValue":
+            return !target.defaultPrevented;
+          case "cancelBubble":
+            return false;
+          default:
+            return undefined;
         }
-        else {
-            throw("Callback must be a function");
+      },
+      set(target, prop, value) {
+        lib.verbose(`event.${prop} set to: ${value}`);
+        // Allow dynamic setting of event type and other properties
+        target[prop] = value;
+        return true;
+      },
+    }
+  ),
+  saveAs: function (data, fname) {
+    // TODO: If Blob need to extract the data.
+    lib.writeFile(fname, data);
+  },
+  setInterval: function (func, time) {
+    // For malware analysis, we want to execute the callback
+    // but need to handle cases where the callback references the interval ID
+    lib.verbose("setInterval called, scheduling callback execution");
+    const intervalId = Math.floor(Math.random() * 1000);
+
+    // Capture lib reference for use in async callback
+    const capturedLib = lib;
+
+    // Use setTimeout to allow the interval ID to be assigned first
+    setTimeout(() => {
+      if (typeof func === "function") {
+        try {
+          func();
+        } catch (e) {
+          capturedLib.verbose("setInterval callback error: " + e.message);
         }
+      } else if (typeof func === "string") {
+        try {
+          eval(func);
+        } catch (e) {
+          capturedLib.verbose("setInterval string callback error: " + e.message);
+        }
+      }
+    }, 0);
+
+    return intervalId;
+  },
+  clearInterval: function (id) {
+    // No-op since we execute callbacks immediately
+    lib.verbose("clearInterval called with id: " + id);
+  },
+  setTimeout: function (func, time, ...args) {
+    let delay = Number(time);
+    if (time === undefined || Number.isNaN(delay)) {
+      delay = 0;
+    }
+
+    let callback = func;
+    if (typeof callback === "string") {
+      const code = callback;
+      callback = function () {
+        const logged = lib.logJS(code);
+        sandbox.eval(logged);
+      };
+    }
+
+    if (typeof callback !== "function") {
+      lib.warning("setTimeout called with invalid handler");
+      return Math.floor(Math.random() * 1000);
+    }
+
+    const key = callback.toString();
+    __timeoutTracker[key] = (__timeoutTracker[key] || 0) + 1;
+    if (__timeoutTracker[key] > 300) {
+      lib.verbose("Recursive setTimeout() loop detected. Breaking loop.");
+      return Math.floor(Math.random() * 1000);
+    }
+
+    try {
+      callback.apply(null, args);
+    } catch (e) {
+      lib.warning(`setTimeout callback failed: ${e}`);
+    }
+
+    return Math.floor(Math.random() * 1000);
+  },
+  clearTimeout: function (id) {
+    lib.verbose("clearTimeout called with id: " + id);
+  },
+  logJS: lib.logJS,
+  logIOC: lib.logIOC,
+  logUrl: lib.logUrl,
+  ActiveXObject,
+  dom,
+  window: {
+    addEventListener: function (event, callback, useCapture) {
+      lib.verbose(`window.addEventListener('${event}') called`);
+      lib.logIOC(
+        "window.addEventListener",
+        { event, useCapture },
+        `Script added event listener for '${event}' event`
+      );
+      // Mock implementation - just log the call
     },
-    logJS: lib.logJS,
-    logIOC: lib.logIOC,
-    logUrl: lib.logUrl,
-    ActiveXObject,
-    dom,
-    alert: (x) => {
-        lib.info("Displayed alert(" + x + ")");
+    URL: {
+      createObjectURL: function (blob) {
+        const url =
+          "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+        lib.logIOC(
+          "window.URL.createObjectURL",
+          { url },
+          `Script created object URL ${url}`
+        );
+        return url;
+      },
+      revokeObjectURL: function (url) {
+        lib.verbose(`window.URL.revokeObjectURL called for ${url}`);
+      },
     },
-    InstallProduct: (x) => {
-        lib.logUrl("InstallProduct", x);
+    atob: function (str) {
+      // Use the global atob function
+      return sandbox.atob(str);
     },
-    console: {
-        //log: (x) => console.log(x),
-        //log: (x) => lib.info("Script output: " + JSON.stringify(x)),
-        log: function (x) {
-            lib.info("Script output: " + x);
-            // Log evals of JS downloaded from a C2 if needed.
-            if (x === "EXECUTED DOWNLOADED PAYLOAD") {
-                lib.logIOC("PayloadExec", x, "The script executed JS returned from a C2 server.");
+    moveTo: function (x, y) {
+      lib.verbose(`window.moveTo(${x}, ${y}) called`);
+      lib.logIOC(
+        "window.moveTo",
+        { x, y },
+        `Script attempted to move window to position (${x}, ${y})`
+      );
+    },
+    resizeTo: function (width, height) {
+      lib.verbose(`window.resizeTo(${width}, ${height}) called`);
+      lib.logIOC(
+        "window.resizeTo",
+        { width, height },
+        `Script attempted to resize window to ${width}x${height}`
+      );
+    },
+    get location() {
+      // Return the global location object so window.location.href works
+      return sandbox.location;
+    },
+    set location(value) {
+      // Allow setting window.location to a URL (like window.location = "http://...")
+      lib.info(`Script is setting window.location to ${value}`);
+      lib.logIOC(
+        "window.location.set",
+        { value },
+        `Script is setting window.location to ${value}`
+      );
+      lib.logUrl("window.location", value);
+      if (sandbox.location) {
+        sandbox.location.href = value;
+      }
+    },
+    frames: [], // Array of frames in this window (empty for top-level window)
+  },
+  alert: (x) => {
+    lib.info("Displayed alert(" + x + ")");
+  },
+  InstallProduct: (x) => {
+    lib.logUrl("InstallProduct", x);
+  },
+  console: {
+    //log: (x) => console.log(x),
+    //log: (x) => lib.info("Script output: " + JSON.stringify(x)),
+    log: function (x) {
+      lib.info("Script output: " + x);
+      // Check for our monitoring messages
+      if (typeof x === "string" && x.includes("DEOBFUSCATED URL DETECTED:")) {
+        const url = x.replace("DEOBFUSCATED URL DETECTED: ", "");
+        lib.logUrl("DeobfuscatedURL", url);
+        lib.logIOC(
+          "DeobfuscatedURL",
+          { url: url },
+          "Script deobfuscated and attempted to navigate to URL: " + url
+        );
+      } else if (
+        typeof x === "string" &&
+        x.includes("String.fromCharCode deobfuscation detected:")
+      ) {
+        const decodedContent = x.replace(
+          "String.fromCharCode deobfuscation detected: ",
+          ""
+        );
+        lib.logIOC(
+          "String.fromCharCode",
+          { decoded: decodedContent },
+          "Script used String.fromCharCode for deobfuscation"
+        );
+      }
+      // Log evals of JS downloaded from a C2 if needed.
+      if (x === "EXECUTED DOWNLOADED PAYLOAD") {
+        lib.logIOC(
+          "PayloadExec",
+          x,
+          "The script executed JS returned from a C2 server."
+        );
+      }
+    },
+    error: function (x) {
+      lib.info("Script error output: " + x);
+      // Add error output to IOCs for analysis
+      lib.logIOC(
+        "console.error",
+        { message: x },
+        "Script logged an error message"
+      );
+    },
+    warn: function (x) {
+      lib.info("Script warning output: " + x);
+      // Add warning output to IOCs for analysis
+      lib.logIOC(
+        "console.warn",
+        { message: x },
+        "Script logged a warning message"
+      );
+    },
+    clear: function () {},
+  },
+  Enumerator: require("./emulator/Enumerator"),
+  GetObject: require("./emulator/WMI").GetObject,
+  JSON,
+  location: new Proxy(
+    {
+      href: "about:blank",
+      hostname: "localhost",
+      pathname: "/",
+      protocol: "http:",
+      toString: () => this.href,
+      replace: function (url) {
+        lib.info(`Script is replacing location with ${url}`);
+        lib.logIOC(
+          "location.replace",
+          { url },
+          `Script called location.replace() with ${url}`
+        );
+        lib.logUrl("location.replace", url);
+        this.href = url;
+      },
+      assign: function (url) {
+        lib.info(`Script is assigning location to ${url}`);
+        lib.logIOC(
+          "location.assign",
+          { url },
+          `Script called location.assign() with ${url}`
+        );
+        lib.logUrl("location.assign", url);
+        this.href = url;
+      },
+      reload: function (forcedReload) {
+        lib.info(`Script called location.reload(${forcedReload})`);
+        lib.logIOC(
+          "location.reload",
+          { forcedReload },
+          `Script called location.reload()`
+        );
+      },
+    },
+    {
+      get(target, name) {
+        const locationGetValue = target[name];
+        if (name === "href" || name === "toString") {
+          lib.verbose(
+            `location.${name} accessed, returning: ${locationGetValue}`
+          );
+        }
+        return target[name];
+      },
+      set(target, name, value) {
+        lib.info(`Script is setting location.${name} to ${value}`);
+        lib.logIOC(
+          "Location.set",
+          { property: name, value },
+          `Script is setting window.location.${name} to ${value}`
+        );
+        lib.logUrl("Location", value);
+        target[name] = value;
+        if (name === "href") {
+          lib.info(`Script is navigating to ${value}`);
+        }
+        return true;
+      },
+    }
+  ),
+  parse: (x) => {},
+  rewrite: (code, log = false) => {
+    const ret = rewrite(code, (useException = true));
+    // Note: Can't use lib functions here as lib is not available in sandbox context
+    // If rewrite failed and returned a parse error, return original code to avoid crashing
+    if (ret === 'throw("Parse Error")') {
+      // For now, just return the original code - the main script analysis
+      // still has proper loop rewriting, this is just for dynamic eval'd snippets
+      return code;
+    }
+    return ret;
+  },
+  ScriptEngine: () => {
+    const type = "JScript"; // or "JavaScript", or "VBScript"
+    // lib.warn(`Emulating a ${type} engine (in ScriptEngine)`);
+    return type;
+  },
+  _typeof: (x) => (x.typeof ? x.typeof : typeof x),
+  WScript: wscript_proxy,
+  WSH: wscript_proxy,
+  decodeURIComponent: (x) => {
+    out = decodeURIComponent(x);
+    if (argv["decode-uri-component-as-ioc"]) {
+      if (out !== null && out !== x && out !== "" && out !== "") {
+        lib.logIOC("decodeURIComponent", { out }, `decodeURIComponent Output`);
+      }
+    }
+    return out;
+  },
+  unescape: (x) => {
+    out = unescape(x);
+    if (argv["decode-unescape-as-ioc"]) {
+      if (out !== null && out !== x && out !== "" && out !== "") {
+        lib.logIOC("unescape", { out }, `unescape Output`);
+      }
+    }
+    return out;
+  },
+  decodeURI: (x) => {
+    out = decodeURI(x);
+    if (argv["decode-uri-as-ioc"]) {
+      if (out !== null && out !== x && out !== "" && out !== "") {
+        lib.logIOC("decodeURI", { out }, `decodeURI Output`);
+      }
+    }
+    return out;
+  },
+  self: {},
+  require,
+  atob: function (str) {
+    try {
+      // Make sure we have a valid string and handle all edge cases
+      if (str === undefined || str === null) {
+        lib.error("atob called with invalid input: " + typeof str);
+        return "";
+      }
+
+      // Ensure we're working with a string
+      str = String(str);
+
+      try {
+        // Create buffer directly from base64 string
+        const buffer = Buffer.from(str, "base64");
+
+        // Check if content is printable
+        const isPrintable = /^[\x20-\x7E\t\r\n]*$/.test(
+          buffer.toString("binary")
+        );
+
+        // Create the output filename using a hash of the content
+        const fs = require("fs");
+        const path = require("path");
+        const crypto = require("crypto");
+
+        // Create a SHA256 hash of the content for the filename
+        const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+        const filename = `${hash}.bin`;
+
+        // Get the results directory directly from process.argv[3]
+        // This is the actual .results directory that box-js creates
+        const resultsDir = process.argv[3] || "./";
+
+        // Ensure results directory exists
+        if (!fs.existsSync(resultsDir)) {
+          fs.mkdirSync(resultsDir, { recursive: true });
+        }
+
+        // Create absolute file path
+        const filepath = path.resolve(path.join(resultsDir, filename));
+
+        // Always save the raw buffer to a file
+        fs.writeFileSync(filepath, buffer);
+
+        // Store the absolute filepath in the sandbox itself as a property
+        // This makes it accessible to the click handler
+        sandbox.lastDecodedFile = filepath;
+        global.lastDecodedFile = filepath; // Also store in global for redundancy
+
+        // For display in logs
+        const decoded = buffer.toString("binary");
+
+        if (isPrintable) {
+          // For printable content, truncate it to avoid dumping large content in logs
+          const displayContent =
+            decoded.length > 100 ? decoded.substring(0, 100) + "..." : decoded;
+          lib.logIOC(
+            "atob",
+            {
+              input_length: str.length,
+              output_length: buffer.length,
+              output_sample: displayContent,
+              file: filepath,
+            },
+            `atob Decoded Text Content (saved to ${filename})`
+          );
+        } else {
+          // For binary content, don't include the content in the log
+          lib.logIOC(
+            "atob",
+            {
+              input_length: str.length,
+              output_length: buffer.length,
+              content_type: "binary",
+              file: filepath,
+            },
+            `atob Decoded Binary Content (saved to ${filename})`
+          );
+        }
+
+        lib.info(`Saved atob decoded content to ${filepath}`);
+
+        // Return the result as a binary string
+        return decoded;
+      } catch (bufferError) {
+        lib.error(`Buffer error in atob: ${bufferError.message}`);
+        return ""; // Return empty string on error
+      }
+    } catch (e) {
+      lib.error(`Fatal error in atob: ${e.message}`);
+      return "";
+    }
+  },
+  document: {
+    write: function (content) {
+      // Log the full content to IOC but use a truncated version for the info message
+      lib.logIOC("document.write", { content }, "Script wrote to document");
+      const truncatedContent =
+        content && content.length > 50
+          ? content.substring(0, 50) + "... [content truncated]"
+          : content;
+      lib.info(
+        `document.write() called (length: ${
+          content ? content.length : 0
+        } bytes)`
+      );
+
+      // Parse content for script tags and add JavaScript code to execution queue
+      if (content && typeof content === "string") {
+        const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        while ((match = scriptRegex.exec(content)) !== null) {
+          const scriptContent = match[1];
+          if (scriptContent && scriptContent.trim()) {
+            lib.info(
+              `Found JavaScript in document.write content (${scriptContent.length} bytes)`
+            );
+            // Add to dynamically written scripts array for later execution
+            if (typeof sandbox.dynamicScripts === "undefined") {
+              sandbox.dynamicScripts = [];
             }
-        },
-        clear: function() {},
+            sandbox.dynamicScripts.push(scriptContent);
+          }
+        }
+      }
     },
-    Enumerator: require("./emulator/Enumerator"),
-    GetObject: require("./emulator/WMI").GetObject,
-    JSON,
-    location: new Proxy({
-        href: "http://www.foobar.com/",
+    clear: function () {},
+    writeln: function (content) {
+      // Log the full content to IOC but use a truncated version for the info message
+      lib.logIOC("document.writeln", { content }, "Script wrote to document");
+      const truncatedContent =
+        content && content.length > 50
+          ? content.substring(0, 50) + "... [content truncated]"
+          : content;
+      lib.info(
+        `document.writeln() called (length: ${
+          content ? content.length : 0
+        } bytes)`
+      );
+
+      // Parse content for script tags and add JavaScript code to execution queue
+      if (content && typeof content === "string") {
+        const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        while ((match = scriptRegex.exec(content)) !== null) {
+          const scriptContent = match[1];
+          if (scriptContent && scriptContent.trim()) {
+            lib.info(
+              `Found JavaScript in document.writeln content (${scriptContent.length} bytes)`
+            );
+            // Add to dynamically written scripts array for later execution
+            if (typeof sandbox.dynamicScripts === "undefined") {
+              sandbox.dynamicScripts = [];
+            }
+            sandbox.dynamicScripts.push(scriptContent);
+          }
+        }
+      }
+    },
+    createElement: function (tag) {
+      lib.verbose(`document.createElement(${tag}) called`);
+      return {
+        tagName: tag.toUpperCase(),
+        src: "",
+        href: "",
+        text: "",
+        style: {},
+        download: "",
+        async: false,
+        _textContent: "",
+        _innerHTML: "",
+        get textContent() {
+          return this._textContent || "";
+        },
+        set textContent(value) {
+          this._textContent = value == null ? "" : String(value);
+        },
+        get innerHTML() {
+          return this._innerHTML || "";
+        },
+        set innerHTML(value) {
+          this._innerHTML = value == null ? "" : String(value);
+        },
+        appendChild: function (child) {
+          handleDomAppend(child, `${tag}.appendChild`);
+          return child;
+        },
+        parentNode: null,
+        setAttribute: function (name, value) {
+          lib.verbose(
+            `setAttribute(${name}, ${value}) called on ${tag} element`
+          );
+          this[name] = value;
+          // Handle script src - only log as IOC, not in URLs
+          if (tag.toLowerCase() === "script" && name === "src") {
+            lib.logIOC(
+              "ScriptSrc",
+              { url: value, tag: tag },
+              `Script element loads external JavaScript from: ${value}`
+            );
+          }
+          // Handle other URLs - log both as URL and IOC
+          else if (
+            (tag.toLowerCase() === "link" && name === "href") ||
+            (tag.toLowerCase() === "a" && name === "href")
+          ) {
+            lib.logUrl(`${tag}.${name}`, value);
+            if (tag.toLowerCase() === "link" && name === "href") {
+              lib.logIOC(
+                "LinkHref",
+                { url: value, tag: tag },
+                `Link element references external resource: ${value}`
+              );
+            } else if (tag.toLowerCase() === "a" && name === "href") {
+              lib.logIOC(
+                "AnchorHref",
+                { url: value, tag: tag },
+                `Anchor element links to: ${value}`
+              );
+            }
+          }
+          if (tag.toLowerCase() === "a" && name === "download") {
+            lib.logIOC(
+              "FileDownload",
+              { filename: value },
+              `Script attempted to download file: ${value}`
+            );
+          }
+        },
+        click: function () {
+          if (
+            tag.toLowerCase() === "a" &&
+            this.download &&
+            argv["fake-download"]
+          ) {
+            lib.verbose(
+              `<a> tag clicked with download attribute: ${this.download}`
+            );
+
+            // Get the content to save - try to find the most recent atob decoded content
+            let contentToSave = "";
+            let fileData = null;
+
+            // Get the results directory directly from process.argv[3]
+            // This is the actual .results directory that box-js creates
+            const outputDir = process.argv[3] || "./";
+
+            // Try to use the last decoded content from atob if available
+            if (
+              sandbox.lastDecodedFile &&
+              typeof sandbox.lastDecodedFile === "string"
+            ) {
+              try {
+                lib.verbose(
+                  `Using lastDecodedFile: ${sandbox.lastDecodedFile}`
+                );
+                fileData = fs.readFileSync(sandbox.lastDecodedFile);
+                contentToSave = fileData;
+              } catch (e) {
+                lib.error(`Error reading lastDecodedFile: ${e.message}`);
+              }
+            } else if (
+              global.lastDecodedFile &&
+              typeof global.lastDecodedFile === "string"
+            ) {
+              try {
+                lib.verbose(
+                  `Using global.lastDecodedFile: ${global.lastDecodedFile}`
+                );
+                fileData = fs.readFileSync(global.lastDecodedFile);
+                contentToSave = fileData;
+              } catch (e) {
+                lib.error(`Error reading global.lastDecodedFile: ${e.message}`);
+              }
+            }
+
+            // If we have content to save
+            if (contentToSave) {
+              const fs = require("fs");
+              const path = require("path");
+              const crypto = require("crypto");
+
+              // Create a hash of the content for the filename
+              const hash = crypto
+                .createHash("sha256")
+                .update(contentToSave)
+                .digest("hex");
+
+              // Use the specified download filename but add extension if missing
+              let downloadFilename = this.download || "download.bin";
+
+              // Save the file to the output directory with the download name
+              const filepath = path.resolve(
+                path.join(outputDir, `${hash}_${downloadFilename}`)
+              );
+
+              // Ensure file gets written
+              try {
+                fs.writeFileSync(filepath, contentToSave);
+                lib.info(`Saved downloaded file to ${filepath}`);
+
+                // Log the download as an IOC
+                lib.logIOC(
+                  "download",
+                  {
+                    filename: downloadFilename,
+                    file: filepath,
+                    hash: hash,
+                    size: contentToSave.length,
+                  },
+                  `File downloaded: ${downloadFilename} (${hash})`
+                );
+              } catch (e) {
+                lib.error(`Error saving downloaded file: ${e.message}`);
+              }
+            } else {
+              lib.error(
+                `No content available to save for download: ${this.download}`
+              );
+            }
+          }
+        },
+        getAttribute: function (name) {
+          lib.verbose(`getAttribute(${name}) called on ${tag} element`);
+          return this[name];
+        },
+      };
+    },
+    createElementNS: function (namespace, tag) {
+      lib.verbose(`document.createElementNS(${namespace}, ${tag}) called`);
+      // Return the same type of object as createElement
+      return this.createElement(tag);
+    },
+    getElementById: function (id) {
+      lib.verbose(`document.getElementById(${id}) called`);
+      return {
+        innerHTML: "",
+        value: "",
+        href: "",
+        textContent: "",
+        style: {
+          display: "",
+        },
+        appendChild: function () {},
+        addEventListener: function (event, callback, useCapture) {
+          lib.verbose(`Element.addEventListener(${event}) called`);
+          lib.logIOC(
+            "Element Event",
+            { event: event, element_id: id },
+            `Element with ID '${id}' added '${event}' event listener`
+          );
+
+          // Execute callbacks for behavioral analysis (like patch.js does)
+          if (callback) {
+            // Capture lib reference for use in async callback
+            const capturedLib = lib;
+            try {
+              setTimeout(() => {
+                capturedLib.verbose(`Executing ${event} handler for element ${id}`);
+                if (typeof callback === "function") {
+                  callback();
+                } else if (typeof callback === "string") {
+                  // Execute string callbacks as JavaScript (real browser behavior)
+                  capturedLib.verbose(
+                    `Executing string callback: ${callback.substring(0, 100)}${
+                      callback.length > 100 ? "..." : ""
+                    }`
+                  );
+                  eval(callback);
+                }
+              }, 100);
+            } catch (e) {
+              lib.verbose(
+                `Error executing ${event} handler for element ${id}: ${e.message}`
+              );
+            }
+          }
+        },
+      };
+    },
+    getElementsByTagName: function (tagName) {
+      lib.verbose(`document.getElementsByTagName(${tagName}) called`);
+      // Return a mock element array with parentNode for script injection patterns
+      const mockElement = {
+        tagName: tagName.toUpperCase(),
+        parentNode: {
+          insertBefore: function (newNode, referenceNode) {
+            lib.verbose(
+              `parentNode.insertBefore() called - inserting ${
+                newNode.tagName || "element"
+              } before ${referenceNode.tagName || "element"}`
+            );
+            handleDomAppend(newNode, "document.parentNode.insertBefore");
+            return newNode;
+          },
+          appendChild: function (newNode) {
+            lib.verbose(
+              `parentNode.appendChild() called - appending ${
+                newNode.tagName || "element"
+              }`
+            );
+            handleDomAppend(newNode, "document.parentNode.appendChild");
+            return newNode;
+          },
+        },
+      };
+      return [mockElement];
+    },
+    addEventListener: function (event, callback, useCapture) {
+      lib.verbose(`document.addEventListener('${event}') called`);
+      lib.logIOC(
+        "document.addEventListener",
+        { event },
+        `Script added '${event}' event listener to document`
+      );
+
+      // Store callback for later execution
+      if (typeof sandbox.listenerCallbacks === "undefined") {
+        sandbox.listenerCallbacks = [];
+      }
+      sandbox.listenerCallbacks.push(callback);
+
+      // If it's a DOMContentLoaded or load event, execute immediately
+      if (event === "DOMContentLoaded" || event === "load") {
+        try {
+          callback({ type: event });
+          lib.verbose(`Executed '${event}' event handler immediately`);
+        } catch (e) {
+          lib.error(`Error executing '${event}' handler: ${e.message}`);
+        }
+      }
+    },
+    removeEventListener: function (event, callback, useCapture) {
+      lib.verbose(`document.removeEventListener('${event}') called`);
+    },
+    documentElement: {
+      appendChild: function (element) {
+        lib.verbose("document.documentElement.appendChild() called");
+        return handleDomAppend(
+          element,
+          "document.documentElement.appendChild"
+        );
+      },
+    },
+    body: {
+      innerHTML: "",
+      appendChild: function (element) {
+        lib.verbose("document.body.appendChild() called");
+        return handleDomAppend(element, "document.body.appendChild");
+      },
+      onload: function () {
+        lib.verbose("document.body.onload() called");
+        return true;
+      },
+      addEventListener: function (event, callback, useCapture) {
+        lib.verbose(`document.body.addEventListener('${event}') called`);
+        lib.logIOC(
+          "document.body.addEventListener",
+          { event },
+          `Script added '${event}' event listener to document.body`
+        );
+
+        // Store callback for later execution
+        if (typeof sandbox.listenerCallbacks === "undefined") {
+          sandbox.listenerCallbacks = [];
+        }
+        sandbox.listenerCallbacks.push(callback);
+
+        // If it's a load event, execute immediately
+        if (event === "load") {
+          try {
+            callback({ type: event });
+            lib.verbose(`Executed body '${event}' event handler immediately`);
+          } catch (e) {
+            lib.error(`Error executing body '${event}' handler: ${e.message}`);
+          }
+        }
+      },
+      removeEventListener: function (event, callback, useCapture) {
+        lib.verbose(`document.body.removeEventListener('${event}') called`);
+      },
+    },
+    location: new Proxy(
+      {
+        href: "about:blank",
+        hostname: "localhost",
+        pathname: "/",
         protocol: "http:",
-        host: "www.foobar.com",
-        hostname: "www.foobar.com",
-    }, {
-        get: function(target, name) {
-            switch (name) {
-            case Symbol.toPrimitive:
-                return () => "http://www.foobar.com/";
-            default:
-                return target[name.toLowerCase()];
-            }
+        toString: () => this.href,
+        replace: function (url) {
+          lib.info(`Script is replacing document.location with ${url}`);
+          lib.logIOC(
+            "document.location.replace",
+            { url },
+            `Script called document.location.replace() with ${url}`
+          );
+          lib.logUrl("document.location.replace", url);
+          this.href = url;
         },
-    }),
-    parse: (x) => {},
-    rewrite: (code, log = false) => {
-        const ret = rewrite(code, useException=true);
-        if (log) lib.logJS(ret);
-        return ret;
+        assign: function (url) {
+          lib.info(`Script is assigning document.location to ${url}`);
+          lib.logIOC(
+            "document.location.assign",
+            { url },
+            `Script called document.location.assign() with ${url}`
+          );
+          lib.logUrl("document.location.assign", url);
+          this.href = url;
+        },
+        reload: function (forcedReload) {
+          lib.info(`Script called document.location.reload(${forcedReload})`);
+          lib.logIOC(
+            "document.location.reload",
+            { forcedReload },
+            `Script called document.location.reload()`
+          );
+        },
+      },
+      {
+        get(target, name) {
+          if (name === Symbol.toPrimitive) return () => target.href;
+          const docLocationGetValue = target[name];
+          lib.logUrl("document.location.get", docLocationGetValue);
+          return target[name];
+        },
+        set(target, name, value) {
+          lib.logIOC(
+            "document.location.set",
+            { property: name, value },
+            `Script is setting document.location.${name} to ${value}`
+          );
+          lib.logUrl("document.location", value);
+          target[name] = value;
+          if (name === "href") {
+            lib.info(`Script is navigating to ${value}`);
+          }
+          return true;
+        },
+      }
+    ),
+    cookie: "",
+    open: function () {
+      lib.verbose(`document.open() called`);
+      lib.logIOC("document.open", {}, "Script called document.open()");
     },
-    ScriptEngine: () => {
-        const type = "JScript"; // or "JavaScript", or "VBScript"
-        // lib.warn(`Emulating a ${type} engine (in ScriptEngine)`);
-        return type;
+    close: function () {
+      lib.verbose(`document.close() called`);
+      lib.logIOC("document.close", {}, "Script called document.close()");
     },
-    _typeof: (x) => x.typeof ? x.typeof : typeof x,
-    WScript: wscript_proxy,
-    WSH: wscript_proxy,
-    self: {},
-    require
+  },
+  ArrayBuffer: function (length) {
+    this.byteLength = length;
+    lib.verbose(`ArrayBuffer created with length ${length}`);
+  },
+  Uint8Array: function (buffer) {
+    if (typeof buffer === "number") {
+      this.length = buffer;
+      this.buffer = new ArrayBuffer(buffer);
+    } else {
+      this.buffer = buffer;
+      this.length = buffer.byteLength;
+    }
+
+    for (let i = 0; i < this.length; i++) {
+      this[i] = 0;
+    }
+
+    this.set = function (array, offset) {
+      offset = offset || 0;
+      for (let i = 0; i < array.length; i++) {
+        this[offset + i] = array[i];
+      }
+    };
+
+    lib.verbose(`Uint8Array created with length ${this.length}`);
+  },
+  Blob: function (parts, options) {
+    this.parts = parts || [];
+    this.options = options || {};
+    lib.logIOC(
+      "Blob",
+      { parts: JSON.stringify(parts), options },
+      `Script created a new Blob`
+    );
+  },
+  URL: {
+    createObjectURL: function (blob) {
+      const url =
+        "blob:fake-url-" + Math.random().toString(36).substring(2, 15);
+      lib.logIOC(
+        "URL.createObjectURL",
+        { url },
+        `Script created object URL ${url}`
+      );
+      return url;
+    },
+    revokeObjectURL: function (url) {
+      lib.verbose(`URL.revokeObjectURL called for ${url}`);
+    },
+  },
+  AudioContext: function () {
+    // Mock AudioContext for browser-based malware
+    this.sampleRate = 44100;
+    this.currentTime = 0;
+    this.destination = {};
+    this.listener = {};
+    this.state = "running";
+
+    // Mock methods
+    this.suspend = function () {
+      lib.verbose("AudioContext.suspend() called");
+      this.state = "suspended";
+      return Promise.resolve();
+    };
+
+    this.resume = function () {
+      lib.verbose("AudioContext.resume() called");
+      this.state = "running";
+      return Promise.resolve();
+    };
+
+    this.close = function () {
+      lib.verbose("AudioContext.close() called");
+      this.state = "closed";
+      return Promise.resolve();
+    };
+
+    this.createOscillator = function () {
+      lib.verbose("AudioContext.createOscillator() called");
+      return {
+        frequency: { value: 440 },
+        type: "sine",
+        start: function () {},
+        stop: function () {},
+        connect: function () {},
+      };
+    };
+
+    this.createGain = function () {
+      lib.verbose("AudioContext.createGain() called");
+      return {
+        gain: { value: 1 },
+        connect: function () {},
+      };
+    };
+
+    this.createBuffer = function (channels, length, sampleRate) {
+      lib.verbose(
+        `AudioContext.createBuffer(${channels}, ${length}, ${sampleRate}) called`
+      );
+      return {
+        numberOfChannels: channels,
+        length: length,
+        sampleRate: sampleRate,
+        getChannelData: function (channel) {
+          return new Float32Array(length);
+        },
+      };
+    };
+
+    this.decodeAudioData = function (audioData) {
+      lib.verbose("AudioContext.decodeAudioData() called");
+      return Promise.resolve(this.createBuffer(2, 44100, 44100));
+    };
+
+    lib.logIOC(
+      "AudioContext",
+      { sampleRate: this.sampleRate },
+      "Script created AudioContext"
+    );
+    lib.verbose(`AudioContext created with sampleRate: ${this.sampleRate}`);
+  },
+  webkitAudioContext: function () {
+    // Some scripts might use webkitAudioContext prefix
+    lib.verbose("webkitAudioContext created (redirecting to AudioContext)");
+    return new sandbox.AudioContext();
+  },
+  structuredClone: function (value) {
+    // Polyfill for structuredClone in vm2 sandbox
+    // This provides basic deep cloning functionality and triggers getters
+    lib.verbose("structuredClone called with value type: " + typeof value);
+
+    if (value === null || typeof value !== "object") {
+      return value;
+    }
+    if (value instanceof Date) {
+      return new Date(value.getTime());
+    }
+    if (value instanceof Array) {
+      return value.map((item) => sandbox.structuredClone(item));
+    }
+    if (typeof value === "object") {
+      const cloned = {};
+      // Get all property names including non-enumerable ones
+      const allProps = Object.getOwnPropertyNames(value);
+      lib.verbose(
+        "structuredClone: Processing object with properties: " +
+          allProps.join(", ")
+      );
+
+      for (const key of allProps) {
+        try {
+          const descriptor = Object.getOwnPropertyDescriptor(value, key);
+          lib.verbose(
+            `structuredClone: Processing property ${key}, has getter: ${!!(
+              descriptor && descriptor.get
+            )}`
+          );
+
+          if (descriptor && descriptor.get) {
+            // For getter properties, access them to trigger execution
+            lib.verbose(`structuredClone: Accessing getter property ${key}`);
+            const propValue = value[key];
+            lib.verbose(
+              `structuredClone: Getter ${key} returned: ${typeof propValue}`
+            );
+            cloned[key] = sandbox.structuredClone(propValue);
+          } else if (descriptor && descriptor.value !== undefined) {
+            // For regular properties
+            cloned[key] = sandbox.structuredClone(descriptor.value);
+          }
+        } catch (e) {
+          lib.verbose(
+            `structuredClone: Failed to access property ${key}: ${e.message}`
+          );
+        }
+      }
+
+      // Also iterate over enumerable properties to catch anything we missed
+      for (const key in value) {
+        if (value.hasOwnProperty(key) && !(key in cloned)) {
+          try {
+            lib.verbose(
+              `structuredClone: Processing enumerable property ${key}`
+            );
+            cloned[key] = sandbox.structuredClone(value[key]);
+          } catch (e) {
+            lib.verbose(
+              `structuredClone: Failed to clone property ${key}: ${e.message}`
+            );
+          }
+        }
+      }
+
+      lib.verbose("structuredClone: Finished cloning object");
+      return cloned;
+    }
+    return value;
+  },
+  close: function () {
+    lib.verbose("close() called - redirecting to document.close()");
+    lib.logIOC("close", {}, "Script called close() function");
+    // This is likely meant to be document.close()
+    if (sandbox.document && sandbox.document.close) {
+      return sandbox.document.close();
+    }
+  },
+  moveTo: function (x, y) {
+    lib.verbose(`moveTo(${x}, ${y}) called`);
+    lib.logIOC(
+      "moveTo",
+      { x, y },
+      `Script attempted to move window to position (${x}, ${y})`
+    );
+  },
+  resizeTo: function (width, height) {
+    lib.verbose(`resizeTo(${width}, ${height}) called`);
+    lib.logIOC(
+      "resizeTo",
+      { width, height },
+      `Script attempted to resize window to ${width}x${height}`
+    );
+  },
+  BroadcastChannel: function (channelName) {
+    lib.verbose(`BroadcastChannel created with name: ${channelName}`);
+    lib.logIOC(
+      "BroadcastChannel",
+      { channelName },
+      `Script created BroadcastChannel: ${channelName}`
+    );
+    // Return a plain object that can have properties set on it
+    // This allows the malware to use Object.defineProperty on onmessage
+    return {};
+  },
 };
+
+// Make window available as a global and expose fetch/timer helpers
+sandbox.fetch = emulateFetch;
+sandbox.clearTimeout = sandbox.clearTimeout;
+sandbox.window.fetch = emulateFetch;
+sandbox.window.setTimeout = sandbox.setTimeout;
+sandbox.window.clearTimeout = sandbox.clearTimeout;
+sandbox.window.setInterval = sandbox.setInterval;
+sandbox.window.clearInterval = sandbox.clearInterval;
+sandbox.globalThis = sandbox;
+sandbox.global = sandbox;
+lib.verbose(
+  `fetch availability: global ${typeof sandbox.fetch}, window ${typeof sandbox.window.fetch}`
+);
 
 // See https://github.com/nodejs/node/issues/8071#issuecomment-240259088
 // It will prevent console.log from calling the "inspect" property,
 // which can be kinda messy with Proxies
 require("util").inspect.defaultOptions.customInspect = false;
 
+// SECURITY FIX: Dangerous-vm flag disabled for security
 if (argv["dangerous-vm"]) {
-    lib.verbose("Analyzing with native vm module (dangerous!)");
-    const vm = require("vm");
-    //console.log(code);
-    vm.runInNewContext(code, sandbox, {
-        displayErrors: true,
-        // lineOffset: -fs.readFileSync(path.join(__dirname, "patch.js"), "utf8").split("\n").length,
-        filename: "sample.js",
-    });
+  lib.warning("The dangerous-vm flag has been disabled for security reasons.");
+  lib.warning("All analysis now uses vm2 sandboxing for safety.");
+  // Original dangerous code commented out:
+  // const vm = require("vm");
+  // vm.runInNewContext(code, sandbox, {
+  //   displayErrors: true,
+  //   filename: "sample.js",
+  // });
 } else {
-    lib.debug("Analyzing with vm2 v" + require("vm2/package.json").version);
+  lib.debug("Analyzing with vm2 v" + require("vm2/package.json").version);
 
-    const vm = new VM({
-        timeout: (argv.timeout || 10) * 1000,
-        sandbox,
-    });
-    
-    // Fake cscript.exe style ReferenceError messages.
-    code = "ReferenceError.prototype.toString = function() { return \"[object Error]\";};\n\n" + code;
-    // Fake up Object.toString not being defined in cscript.exe.
-    //code = "Object.prototype.toString = undefined;\n\n" + code;
+  // Add self reference (equivalent to window in browsers) - needed for some malware samples
+  sandbox.self = sandbox;
 
-    // Run the document.body.onload() function if defined to simulate
-    // document loading.
-    code += "\nif ((typeof(document) != 'undefined') && (typeof(document.body) != 'undefined') && (typeof(document.body.onload) != 'undefined')) document.body.onload();\n"
+  // Add top reference (references the topmost window) - needed for frame detection checks
+  sandbox.top = sandbox.window;
 
-    // Mac JXA applications have a run() function that is called to
-    // kick things off. Call that if it is defined.
-    code += "\nif (typeof(run) === \"function\") run();\n"
-    
-    // Run all of the collected onclick handler code snippets pulled
-    // from dynamically added HTML.
-    code += "\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
-    
-    // Run all of the collected event listener callback functions 1
-    // more time after the original code has executed in case the DOM
-    // has changed and a callback changes its behavior based on the
-    // DOM contents.
-    code += "\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
-    //console.log(code);
-    
-    // Dump interesting variable values to files for later analysis.
-    if (argv["dump-vars"]) {
-        //argv["no-kill"] = true;
-        code += 'var _boxfso = undefined;\nvar _fileCount = 0;\nfor (var name in this) {\n    const val = this[name];\n    if (typeof(val) == "string") {\n        if ((val.match("http://") || val.match("https://")) && !val.match("mylegitdomain")) {\n            if (typeof(_boxfso == "undefined")) _boxfso = new ActiveXObject("Scripting.FileSystemObject");\n            const fname = "variable_value" + _fileCount + ".txt";\n            _fileCount++;\n            var stream = _boxfso.CreateTextFile(fname, true);\n            stream.Write(val);\n            stream.close();\n        }\n    }\n}\n';
-    }
+  const vm = new VM({
+    timeout: (argv.timeout || 10) * 1000,
+    sandbox,
+  });
 
-    //console.log(code);
-    try{
-        vm.run(code);
-    } catch (e) {
-        lib.error("Sandbox execution failed:");
-        console.log(e.stack);
-        lib.error(e.message);
+  // Fake cscript.exe style ReferenceError messages.
+  code =
+    'ReferenceError.prototype.toString = function() { return "[object Error]";};\n\n' +
+    code;
+  // Fake up Object.toString not being defined in cscript.exe.
+  //code = "Object.prototype.toString = undefined;\n\n" + code;
+
+  // Run the document.body.onload() function if defined to simulate
+  // document loading.
+  code +=
+    "\nif ((typeof(document) != 'undefined') && (typeof(document.body) != 'undefined') && (typeof(document.body.onload) != 'undefined')) document.body.onload();\n";
+
+  // Run all of the collected onclick handler code snippets pulled
+  // from dynamically added HTML.
+  code +=
+    "\nif (typeof dynamicOnclickHandlers === 'undefined') { var dynamicOnclickHandlers = []; }\nfor (const handler of dynamicOnclickHandlers) {\ntry {\neval(handler);\n}\ncatch (e) {\nconsole.log(e.message);\nconsole.log(handler);\n}\n}\n";
+
+  // Mac JXA applications have a run() function that is called to
+  // kick things off. Call that if it is defined.
+  code += "\nif (typeof(run) === \"function\") run();\n";
+
+  // Run all of the collected event listener callback functions 1
+  // more time after the original code has executed in case the DOM
+  // has changed and a callback changes its behavior based on the
+  // DOM contents.
+  code +=
+    "\nif (typeof listenerCallbacks === 'undefined') { var listenerCallbacks = []; }\nif (typeof dummyEvent === 'undefined') { var dummyEvent = {}; }\nfor (const func of listenerCallbacks) {\nfunc(dummyEvent);\n}\n";
+
+  // Dump interesting variable values to files for later analysis.
+  if (argv["dump-vars"]) {
+    code +=
+      'var _boxfso = undefined;\nvar _fileCount = 0;\nfor (var name in this) {\n    const val = this[name];\n    if (typeof(val) == "string") {\n        if ((val.match("http://") || val.match("https://")) && !val.match("mylegitdomain")) {\n            if (typeof(_boxfso == "undefined")) _boxfso = new ActiveXObject("Scripting.FileSystemObject");\n            const fname = "variable_value" + _fileCount + ".txt";\n            _fileCount++;\n            var stream = _boxfso.CreateTextFile(fname, true);\n            stream.Write(val);\n            stream.close();\n        }\n    }\n}\n';
+  }
+  //console.log(code);
+
+  // Enhanced eval implementation captures lib reference while preserving malware behaviour within vm2
+  const evalFunction = (function(libRef, rewriteRef, vmRef) {
+    return function (code) {
+      if (arguments.length === 0) return undefined;
+
+      // Convert to string for consistency with native eval
+      code = `${code}`;
+
+      try {
+        libRef.debug(`eval() called with: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}`);
+
+        // Rewrite the code for safe execution
+        const rewrittenCode = rewriteRef(code, true);
+        return vmRef.run(rewrittenCode);
+      } catch (e) {
+        libRef.warning(`eval() execution failed: ${e.message}`);
+        throw e;
+      }
+    };
+  })(lib, rewrite, vm);
+
+  // Assign eval function to sandbox and make it available for dynamic access
+  sandbox.eval = evalFunction;
+
+  // Ensure eval is accessible via global object for dynamic access like global["eval"]
+  sandbox.global = sandbox;
+
+  // Make sure common global names also point to our eval
+  // This handles cases where malware gets the global object and accesses eval dynamically
+  const originalThis = sandbox;
+  sandbox.constructor = sandbox;
+
+  // Generic fallback mechanism: if execution fails during rewrite mode, retry with --no-rewrite
+  let shouldTryFallback = !argv["no-rewrite"]; // Only fallback if we're currently using rewrite
+
+  // Install a temporary uncaught exception handler for async errors
+  const originalHandler = process.listeners('uncaughtException').slice();
+  const tempHandler = (error) => {
+    if (shouldTryFallback) {
+      lib.warning(`Execution failed during rewrite mode: ${error.message}`);
+      lib.warning("Falling back to --no-rewrite mode");
+      shouldTryFallback = false; // Prevent infinite fallback loops
+
+      // Restore original handlers
+      process.removeAllListeners('uncaughtException');
+      originalHandler.forEach(handler => process.on('uncaughtException', handler));
+
+      // Try with no-rewrite
+      try {
+        const originalCode = fs.readFileSync(filename, "utf8");
+        const fallbackVm = new VM({
+          timeout: (argv.timeout || 10) * 1000,
+          sandbox,
+        });
+        fallbackVm.run(originalCode);
+        lib.info("Fallback execution successful");
+        return;
+      } catch (fallbackError) {
+        lib.error(`Fallback execution also failed: ${fallbackError.message}`);
         process.exit(1);
+      }
     }
+
+    // Re-throw other errors or if fallback is not applicable
+    throw error;
+  };
+
+  if (shouldTryFallback) {
+    process.prependListener('uncaughtException', tempHandler);
+  }
+
+  try {
+    vm.run(code);
+  } catch (error) {
+    // Generic fallback for any synchronous execution error during rewrite mode
+    if (shouldTryFallback) {
+      lib.warning(`Execution failed during rewrite mode: ${error.message}`);
+      lib.warning("Falling back to --no-rewrite mode");
+      shouldTryFallback = false; // Prevent infinite fallback loops
+
+      // Restore async error handlers
+      if (process.listeners('uncaughtException').includes(tempHandler)) {
+        process.removeListener('uncaughtException', tempHandler);
+        originalHandler.forEach(handler => process.on('uncaughtException', handler));
+      }
+
+      try {
+        // Try running the original code without rewriting
+        const originalCode = fs.readFileSync(filename, "utf8");
+        const fallbackVm = new VM({
+          timeout: (argv.timeout || 10) * 1000,
+          sandbox,
+        });
+
+        fallbackVm.run(originalCode);
+        lib.info("Fallback execution successful");
+        return; // Exit successfully from fallback
+      } catch (fallbackError) {
+        lib.error(`Fallback execution also failed: ${fallbackError.message}`);
+        throw error; // Re-throw original error
+      }
+    } else {
+      throw error; // Re-throw if fallback not applicable
+    }
+  }
+
+  try {
+
+    // After the main script execution, check for and execute dynamic scripts
+    if (sandbox.dynamicScripts && sandbox.dynamicScripts.length > 0) {
+      lib.info(
+        `Executing ${sandbox.dynamicScripts.length} dynamic script(s) from document.write/writeln`
+      );
+      for (const script of sandbox.dynamicScripts) {
+        try {
+          lib.info(
+            `Executing dynamic script: ${script.substring(0, 50)}${
+              script.length > 50 ? "..." : ""
+            }`
+          );
+          vm.run(script);
+        } catch (e) {
+          lib.error(`Error executing dynamic script: ${e.message}`);
+          lib.verbose(`Failed script content: ${script}`);
+        }
+      }
+    }
+  } catch (e) {
+    lib.error("Sandbox execution failed:");
+    console.log(e.stack);
+    lib.error(e.message);
+    process.exit(1);
+  }
 }
 
 function mapCLSID(clsid) {
-    clsid = clsid.toUpperCase();
-    switch (clsid) {
+  clsid = clsid.toUpperCase();
+  switch (clsid) {
     case "F935DC22-1CF0-11D0-ADB9-00C04FD58A0B":
-        return "wscript.shell";
+      return "wscript.shell";
     case "000C1090-0000-0000-C000-000000000046":
-        return "windowsinstaller.installer";
+      return "windowsinstaller.installer";
     case "00000566-0000-0010-8000-00AA006D2EA4":
-        return "adodb.stream";
+      return "adodb.stream";
     case "00000535-0000-0010-8000-00AA006D2EA4":
-        return "adodb.recordset";
+      return "adodb.recordset";
     case "00000514-0000-0010-8000-00AA006D2EA4":
-        return "adodb.connection";
+      return "adodb.connection";
     case "0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC":
-        return "scriptcontrol";
-    case "0D43FE01-F093-11CF-8940-00A0C9054228":
-        return "scripting.filesystemobject";
+      return "scriptcontrol";
     case "EE09B103-97E0-11CF-978F-00A02463E06F":
-        return "scripting.dictionary";
+      return "scripting.dictionary";
     case "13709620-C279-11CE-A49E-444553540000":
-        return "shell.application";
+      return "shell.application";
     case "0002DF01-0000-0000-C000-000000000046":
-        return "internetexplorer.application";
+      return "internetexplorer.application";
     case "F935DC26-1CF0-11D0-ADB9-00C04FD58A0B":
-        return "wscript.network";
+      return "wscript.network";
     case "76A64158-CB41-11D1-8B02-00600806D9B6":
-        return "wbemscripting.swbemlocator";
+      return "wbemscripting.swbemlocator";
     case "0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC":
-        return "msscriptcontrol.scriptcontrol";
+      return "msscriptcontrol.scriptcontrol";
     case "0F87369F-A4E5-4CFC-BD3E-73E6154572DD":
-        return "schedule.service";
+      return "schedule.service";
     default:
-        return null;
-    }
+      return null;
+  }
 }
 
-function _makeDomDocument() {
+function _makeDomDocument(originalName) {
     const r = {
-        __name: "_makeDomDocument()",
+        __name: originalName || "_makeDomDocument()",
         createElement: function(tag) {
             const r = {
                 dataType: "??",
@@ -1414,7 +3077,9 @@ function ActiveXObject(name) {
         }
     }
 
-    // Actually emulate the ActiveX object creation.
+    // Actually emulate the ActiveX object creation. Keep the original
+    // casing for forensic __name tracking before folding for dispatch.
+    const originalName = name;
     name = name.toLowerCase()
     if (name.match("xmlhttp") || name.match("winhttprequest")) {
         return require("./emulator/XMLHTTP");
@@ -1423,12 +3088,12 @@ function ActiveXObject(name) {
         return require("./emulator/XSLTemplate");
     }
     if ((name.match("domdocument")) || (name.match("xmldom"))) {
-        const r = _makeDomDocument();
+        const r = _makeDomDocument(originalName);
         return r;
     }
     if (name.match("htmlfile")) {
         const r = {
-            __name: "htmlfile",
+            __name: originalName || "htmlfile",
             "parentWindow" : {
                 "clipboardData" : "Some data",
             },
@@ -1437,7 +3102,8 @@ function ActiveXObject(name) {
     }
     if (name.match("dom")) {
         const r = {
-            __name: "dom",
+            __name: originalName || "dom",
+            document: sandbox.document,
             createElement: function(tag) {
                 var r = this.document.createElement(tag);
                 r.text = "";
@@ -1469,106 +3135,110 @@ function ActiveXObject(name) {
         return r;
     }
 
-    switch (name) {
+  switch (name) {
     case "windowsinstaller.installer":
-        return require("./emulator/WindowsInstaller");
+      return require("./emulator/WindowsInstaller");
     case "word.application":
-        return require("./emulator/WordApplication");
+      return require("./emulator/WordApplication");
     case "adodb.stream":
-        return require("./emulator/ADODBStream")();
+      return require("./emulator/ADODBStream")();
     case "adodb.recordset":
-        return require("./emulator/ADODBRecordSet")();
+      return require("./emulator/ADODBRecordSet")();
     case "adodb.connection":
-        return require("./emulator/ADODBConnection")();
+      return require("./emulator/ADODBConnection")();
     case "scriptcontrol":
-        return require("./emulator/ScriptControl");
+      return require("./emulator/ScriptControl");
     case "scripting.filesystemobject":
-        return require("./emulator/FileSystemObject");
+      return require("./emulator/FileSystemObject");
     case "scripting.dictionary":
         return require("./emulator/Dictionary");
     case "vbscript.regexp":
         return require("./emulator/RegExp");
     case "shell.application":
-        return require("./emulator/ShellApplication");
+      return require("./emulator/ShellApplication");
     case "internetexplorer.application":
-        return require("./emulator/InternetExplorerApplication");
+      return require("./emulator/InternetExplorerApplication");
     case "wscript.network":
-        return require("./emulator/WScriptNetwork");
+      return require("./emulator/WScriptNetwork");
     case "wscript.shell":
-        return require("./emulator/WScriptShell");
+      return require("./emulator/WScriptShell");
     case "wbemscripting.swbemlocator":
-        return require("./emulator/WBEMScriptingSWBEMLocator");
+      return require("./emulator/WBEMScriptingSWBEMLocator");
     case "wbemscripting.swbemdatetime":
-        return require("./emulator/WBEMScriptingSWbemDateTime");
+      return require("./emulator/WBEMScriptingSWbemDateTime");
     case "wbemscripting.swbemnamedvalueset":
-        return require("./emulator/WBEMScriptingSWbemNamedValueSet");
+      return require("./emulator/WBEMScriptingSWbemNamedValueSet");
     case "msscriptcontrol.scriptcontrol":
-        return require("./emulator/MSScriptControlScriptControl");
+      return require("./emulator/MSScriptControlScriptControl");
     case "schedule.service":
-        return require("./emulator/ScheduleService");
+      return require("./emulator/ScheduleService");
     case "system.text.asciiencoding":
-        return require("./emulator/AsciiEncoding");
-    case "system.security.cryptography.frombase64transform":
-        return require("./emulator/Base64Transform");
-    case "system.io.memorystream":
-        return require("./emulator/MemoryStream");
-    case "system.runtime.serialization.formatters.binary.binaryformatter":
-        return require("./emulator/BinaryFormatter");
-    case "system.collections.arraylist":
-        return require("./emulator/ArrayList");
+      return require("./emulator/AsciiEncoding");
+	case "system.security.cryptography.frombase64transform":
+		return require("./emulator/Base64Transform");
+	case "system.security.cryptography.rijndaelmanaged":
+		return require("./emulator/SystemSecurityCryptographyRijndaelManaged")();
+	case "system.security.cryptography.sha256managed":
+		return require("./emulator/SystemSecurityCryptographySHA256Managed")();
+	case "system.io.memorystream":
+		return require("./emulator/MemoryStream");
+	case "system.runtime.serialization.formatters.binary.binaryformatter":
+		return require("./emulator/BinaryFormatter");
+	case "system.collections.arraylist":
+		return require("./emulator/ArrayList");
+	case "system.text.utf8encoding":
+		return require("./emulator/SystemTextUTF8Encoding")();
     default:
-        lib.kill(`Unknown ActiveXObject ${name}`);
-        break;
-    }
+      lib.kill(`Unknown ActiveXObject ${name}`);
+      break;
+  }
 }
 
 function traverse(obj, func) {
-    const keys = Object.keys(obj);
-    for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        const replacement = func.apply(this, [key, obj[key]]);
-        if (replacement) obj[key] = replacement;
-        if (obj.autogenerated) continue;
-        if (obj[key] !== null && typeof obj[key] === "object")
-            traverse(obj[key], func);
-    }
+  const keys = Object.keys(obj);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const replacement = func.apply(this, [key, obj[key]]);
+    if (replacement) obj[key] = replacement;
+    if (obj.autogenerated) continue;
+    if (obj[key] !== null && typeof obj[key] === "object")
+      traverse(obj[key], func);
+  }
 }
 
 // Emulation of member function statements hoisting of by doing some reordering within AST
 function hoist(obj, scope) {
-    scope = scope || obj;
-    // All declarations should be moved to the top of current function scope
-    let newScope = scope;
-    if (obj.type === "FunctionExpression" && obj.body.type === "BlockStatement")
-        newScope = obj.body;
+  scope = scope || obj;
+  // All declarations should be moved to the top of current function scope
+  let newScope = scope;
+  if (obj.type === "FunctionExpression" && obj.body.type === "BlockStatement")
+    newScope = obj.body;
 
-    for (const key of Object.keys(obj)) {
-        if (obj[key] !== null && typeof obj[key] === "object") {
-            const hoisted = [];
-            if (Array.isArray(obj[key])) {
-                obj[key] = obj[key].reduce((arr, el) => {
-                    if (el && el.hoist) {
-                        // Mark as hoisted yet
-                        el.hoist = false;
-                        // Should be hoisted? Add to array and filter out from current.
-                        hoisted.push(el);
-                        // If it was an expression: leave identifier
-                        if (el.hoistExpression)
-                            arr.push(el.expression.left);
-                    } else
-                        arr.push(el);
-                    return arr;
-                }, []);
-            } else if (obj[key].hoist) {
-                const el = obj[key];
+  for (const key of Object.keys(obj)) {
+    if (obj[key] !== null && typeof obj[key] === "object") {
+      const hoisted = [];
+      if (Array.isArray(obj[key])) {
+        obj[key] = obj[key].reduce((arr, el) => {
+          if (el && el.hoist) {
+            // Mark as hoisted yet
+            el.hoist = false;
+            // Should be hoisted? Add to array and filter out from current.
+            hoisted.push(el);
+            // If it was an expression: leave identifier
+            if (el.hoistExpression) arr.push(el.expression.left);
+          } else arr.push(el);
+          return arr;
+        }, []);
+      } else if (obj[key].hoist) {
+        const el = obj[key];
 
-                el.hoist = false;
-                hoisted.push(el);
-                obj[key] = el.expression.left;
-            }
-            scope.body.unshift(...hoisted);
-            // Hoist all elements
-            hoist(obj[key], newScope);
-        }
+        el.hoist = false;
+        hoisted.push(el);
+        obj[key] = el.expression.left;
+      }
+      scope.body.unshift(...hoisted);
+      // Hoist all elements
+      hoist(obj[key], newScope);
     }
+  }
 }

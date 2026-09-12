@@ -31,10 +31,15 @@ function ADODBStream() {
     this.virtual_filename = "(undefined)";
     this.charset = "";
     this.position = 0;
+    this.buffer = "";
     this.open = () => {};
     this.savetofile = function(filename) {
         this.virtual_filename = filename;
         lib.logIOC("ADODBStream", {"name": filename}, "The script wrote a file.");
+        // Ensure buffer is never undefined
+        if (this.buffer === undefined) {
+            this.buffer = "";
+        }
         lib.writeFile(filename, this.buffer);
         lib.logResource(lib.getUUID(), this.virtual_filename, this.buffer, true);
     };

@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - '6'      # First supported version (implements the ES6 features we need)
+  - '18'     # node 6/8 are below the >=10 floor jsdom/strip-comments/xmldom require
   - 'node' # Latest stable release
 script:
   - npm run test

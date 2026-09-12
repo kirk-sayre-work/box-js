@@ -1,4 +1,4 @@
-FROM node:8-alpine
+FROM node:18-alpine
 RUN apk update && apk upgrade
 RUN apk add file gcc m4
 RUN apk add -U --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing aufs-util

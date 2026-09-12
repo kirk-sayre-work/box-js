@@ -1,4 +1,4 @@
-FROM node:8-alpine
+FROM node:18-alpine
 #ENV http_proxy http://PROXY_IP:PORT
 #ENV https_proxy http://PROXY_IP:PORT
 RUN apk update && apk upgrade

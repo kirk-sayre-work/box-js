@@ -158,6 +158,30 @@ single_sample = (q.length == 1);
 // Start analyzing samples.
 q.start();
 
+/* Optional Harrington pass. box-js cannot execute the shell commands a
+ * sample spawns, so `powershell -enc ...` payloads stay opaque; the Rust
+ * deobfuscator resolves them statically. Deliberately run after the worker
+ * has finished rather than from inside lib.runShellCommand(), so it never
+ * competes with the --timeout budget the VM and the rewrite stage share.
+ */
+function harringtonEnrich(directory) {
+    if (!argv["harrington"]) return;
+    try {
+        const { enrich } = require("./tools/harrington-enrich.js");
+        const r = enrich(directory, {
+            bin: argv["harrington-bin"],
+            timeout: argv["harrington-timeout"],
+        });
+        if (r.skipped) {
+            console.log(`harrington: skipped (${r.skipped})`);
+        } else {
+            console.log(`harrington: analyzed ${r.commands_analyzed} command(s), recovered ${r.urls_recovered.length} new URL(s)`);
+        }
+    } catch (e) {
+        console.log(`harrington: enrichment failed (${e.message})`);
+    }
+}
+
 function analyze(filepath, filename, cb) {
 
     let directory = path.join(outputDir, filename + ".results");
@@ -178,6 +202,7 @@ function analyze(filepath, filename, cb) {
 	    console.log("Hint: if the script is heavily obfuscated, --preprocess --unsafe-preprocess can speed up the emulation.");
 	worker.kill();
         // Useful analysis may have occurred.
+	harringtonEnrich(directory);
 	process.exit(0);
 	cb();
     }, timeout * 1000);
@@ -210,6 +235,7 @@ function analyze(filepath, filename, cb) {
         }
 	clearTimeout(killTimeout);
 	worker.kill();
+	harringtonEnrich(directory);
 	if (argv.debug || single_sample) process.exit(code);
 	cb();
     });

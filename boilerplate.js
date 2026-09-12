@@ -10,7 +10,9 @@ const LocalTextDecoder = require("./local_text_decoder.js");
 // the state of the DOM and exhibit different functionality when
 // called again, so save the callback functions so we can call them
 // multiple times.
-const listenerCallbacks = [];
+if (typeof listenerCallbacks === "undefined") {
+	listenerCallbacks = [];
+}
 
 // Wrap decodeURIComponent() so that we can (possibly) track some
 // string decodes.
@@ -58,7 +60,7 @@ decodeURIComponent = (function(_super) {
 })(decodeURIComponent);
 
 // Dummy event to use for faked event handler calls.
-const dummyEvent = {
+var dummyEvent = {
 
     // For debugging.
     __name: "dummyEvent",
@@ -318,10 +320,10 @@ function atobLookup(chr) {
 }
 
 function extractJSFromHTA(s) {
-    const root = parse("" + s);
-    items = root.querySelectorAll('script');
-    r = "";
-    var chunkNum = 0;
+	const root = parse("" + s);
+	items = root.querySelectorAll('script');
+	r = "";
+	var chunkNum = 0;
     for (let i1 = 0; i1 < items.length; ++i1) {
         item = items[i1];
         for (let i2 = 0; i2 < item.childNodes.length; ++i2) {
@@ -333,7 +335,21 @@ function extractJSFromHTA(s) {
             }
         }
     }
-    return r;
+	return r;
+}
+
+function __runInlineScript(source, code) {
+	if (typeof code !== "string") return;
+	const trimmed = code.trim();
+	if (trimmed.length === 0) return;
+	lib.verbose(`Executing inline script from ${source} (${trimmed.length} bytes)`);
+	lib.logIOC("DOM Script", {source, length: trimmed.length}, "The script executed inline script content.");
+	const logged = lib.logJS(code);
+	try {
+		eval.apply(null, [logged]);
+	} catch (e) {
+		lib.warning(`Inline script from ${source} threw ${e}`);
+	}
 }
 
 const fakeUrl = 'http://mylegitdomain.com:2112/and/i/have/a/path.php#tag?var1=12&var2=checkout&ref=otherlegitdomain.moe';
@@ -491,7 +507,7 @@ function __makeFakeElem(data) {
         }
         return __createElement("FAKEELEM");
     };
-    
+
     var fakeDict = {
         // For debugging.
         __name: "fakeDict",
@@ -674,7 +690,7 @@ function __createElement(tag) {
             if ((name === "src") || (name === "href")) {
                 if (val.startsWith("//")) val = "https:" + val;
                 logIOC('Element Source', {val}, "The script set the src or href field of an element.");
-                logUrl('Element Source', val);
+	        logUrl('Element Source', val);
             }
         },
         setAttributeNode: function(name, val) {
@@ -716,13 +732,13 @@ function __createElement(tag) {
         select: function() {
             __currSelectedVal = this.val;
         },
-        setSelectionRange: function() {
-            // Do we have an element value that might get selected?
-            if (typeof(this.attributes["value"]) !== "undefined") {
-                this.val = this.attributes["value"];
-                __currSelectedVal = this.val;
-            }       
-        },
+	setSelectionRange: function() {
+	    // Do we have an element value that might get selected?
+	    if (typeof(this.attributes["value"]) !== "undefined") {
+		this.val = this.attributes["value"];
+		__currSelectedVal = this.val;
+	    }
+	},
         cloneNode: function() {
             //// Actually clone the element (deep copy).
             //return JSON.parse(JSON.stringify(this));
@@ -798,7 +814,7 @@ function __createElement(tag) {
             add: function() {},
             remove: function() {},
             trigger: function() {},
-            toggle: function() {},
+	    toggle: function() {},
             // Trivial stubbing. Just say nothing is in the class
             // list. May need a flag to control this.
             contains: function(x) { return false; },
@@ -1168,16 +1184,26 @@ var document = {
     writeln: function (content) {
         this.write(content);
     },
-    appendChild: function(content) {
-        logIOC('DOM Write', {content}, "The script appended an HTML node to the DOM")
-        const urls = pullActionUrls(content);
-        if (typeof(urls) !== "undefined") {
-            for (const url of urls) {
-                logUrl('Action Attribute', url);
-            };
-        }
-        eval(extractJSFromHTA(content));
-    },
+	appendChild: function(content) {
+		const logData = (typeof content === "object" && content !== null) ? {
+			type: content.myType || content.nodeName || "object",
+			textLength: typeof content.textContent === "string" ? content.textContent.length : undefined,
+		} : {content};
+		logIOC('DOM Write', logData, "The script appended an HTML node to the DOM")
+		if ((typeof content === "object") && (content !== null)) {
+			const inline = typeof content.textContent === "string" ? content.textContent :
+				typeof content.innerHTML === "string" ? content.innerHTML : "";
+			__runInlineScript("document.documentElement.appendChild", inline);
+			return content;
+		}
+		const urls = pullActionUrls(content);
+		if (typeof(urls) !== "undefined") {
+			for (const url of urls) {
+				logUrl('Action Attribute', url);
+			};
+		}
+		__runInlineScript("document.documentElement.appendChild", extractJSFromHTA(content));
+	},
     insertBefore: function(node) {
         logIOC('DOM Insert', {node}, "The script inserted an HTML node on the DOM")
         eval(extractJSFromHTA(node));
@@ -1420,7 +1446,7 @@ function makeWindowObject() {
         open: function(url) {
             if ((typeof(url) == "string") && (url.length > 0)){
                 logIOC('window.open()', {url}, "The script loaded a resource.");
-                logUrl('window.open()', url);
+		logUrl('window.open()', url);
             }
         },
         on: function(trigger, func) {
@@ -1493,6 +1519,8 @@ function makeWindowObject() {
         URL: URL,
         currentServer: "mylegitdomain.com",
         decodeURIComponent: decodeURIComponent,
+	unescape: unescape,
+	decodeURI: decodeURI,
         set onload(func) {
             lib.info("Script set window.onload function.");
             func();
@@ -1529,6 +1557,8 @@ function makeWindowObject() {
     return window;
 }
 window = makeWindowObject();
+window.fetch = fetch;
+lib.verbose(`fetch availability: global ${typeof fetch}, window ${typeof window.fetch}`);
 window.self = window;
 window.top = window;
 self = window;
@@ -1855,18 +1885,29 @@ if (WScript.name != "node") {
 
 timeoutFuncs = {}
 function setTimeout(func, time) {
-    if (!(typeof(func) === "function")) return;
-    // No recursive loops.
-    const funcStr = ("" + func);
-    if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
-    if (timeoutFuncs[funcStr] > 300) {
-        console.log(funcStr);
-        console.log("Recursive setTimeout() loop detected. Breaking loop.")
-        return func;
-    }
-    timeoutFuncs[funcStr]++;
-    func();
-    return func;
+	if (typeof time === "undefined" || isNaN(time)) time = 0;
+	const extraArgs = Array.prototype.slice.call(arguments, 2);
+	let callback = func;
+	if (typeof callback === "string") {
+		const code = callback;
+		callback = function() {
+			eval(code);
+		};
+	}
+	if (typeof callback !== "function") return function() {};
+	const funcStr = ("" + callback);
+	if (typeof(timeoutFuncs[funcStr]) == "undefined") timeoutFuncs[funcStr] = 0;
+	if (timeoutFuncs[funcStr] > 300) {
+		console.log("Recursive setTimeout() loop detected. Breaking loop.");
+		return callback;
+	}
+	timeoutFuncs[funcStr]++;
+	try {
+		callback.apply(null, extraArgs);
+	} catch (e) {
+		lib.warning(`setTimeout callback failed: ${e}`);
+	}
+	return callback;
 };
 function clearTimeout() {};
 function setInterval(func, val) {
@@ -1882,18 +1923,83 @@ var exports = {};
 //var module = {};
 
 // fetch API emulation.
-function fetch(url, data) {
-    lib.logIOC("fetch", {url: url, data: data}, "The script fetch()ed a URL.");
-    lib.logUrl("fetch", url);
-    const r = {
-        ok : true,
-        json : function() { return "1"; },
-    };
-    const p = new Promise((resolve, reject) => {
-        resolve(r);
-    });
-    return p;
+const boilerplateArgv = (typeof argv !== "undefined") ? argv : require("./argv.js").run;
+
+function fetch(input, init) {
+	const options = init || {};
+	const url = typeof input === "string" ? input : "" + input;
+	const method = (options.method || "GET").toUpperCase();
+	const headers = options.headers || {};
+	const body = options.body;
+	lib.verbose(`fetch() stub invoked for ${method} ${url}`);
+	lib.logIOC("fetch", {url, method, headers}, "The script fetch()ed a URL.");
+	lib.logUrl("fetch", url);
+	return new Promise((resolve) => {
+		let response;
+		try {
+			response = lib.fetchUrl(method, url, headers, body);
+		} catch (e) {
+			resolve(__buildFetchResponse(url, Buffer.alloc(0), 500, "Emulated fetch failure", {}));
+			return;
+		}
+		const status = boilerplateArgv["fake-download"] ? 200 : (boilerplateArgv.download ? 200 : 404);
+		const statusText = status === 200 ? "OK" : "Not Found";
+		const buffer = Buffer.isBuffer(response.body) ? response.body : Buffer.from(response.body || "");
+		const headersLower = {};
+		if (response.headers) {
+			for (const key of Object.keys(response.headers)) {
+				headersLower[key.toLowerCase()] = response.headers[key];
+			}
+		}
+		resolve(__buildFetchResponse(url, buffer, status, statusText, headersLower));
+	});
 };
+
+function __buildFetchResponse(url, buffer, status, statusText, headers) {
+	const ok = status >= 200 && status < 300;
+	return {
+		ok,
+		status,
+		statusText,
+		url,
+		headers: {
+			get(name) {
+				if (!name) return null;
+				return headers[name.toLowerCase()] || null;
+			},
+			has(name) {
+				return !!headers[name.toLowerCase()];
+			},
+		},
+		text() {
+			return Promise.resolve(buffer.toString("utf8"));
+		},
+		json() {
+			return new Promise((resolve, reject) => {
+				try {
+					resolve(JSON.parse(buffer.toString("utf8")));
+				} catch (e) {
+					reject(e);
+				}
+			});
+		},
+		arrayBuffer() {
+			const view = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+			return Promise.resolve(view);
+		},
+		blob() {
+			const type = headers["content-type"] || "application/octet-stream";
+			return Promise.resolve(new Blob([buffer], { type }));
+		},
+	};
+}
+
+if (typeof global !== "undefined") {
+	global.fetch = fetch;
+}
+if (typeof globalThis !== "undefined") {
+	globalThis.fetch = fetch;
+}
 
 // Image class stub.
 class Image {
@@ -1961,7 +2067,7 @@ const chrome = {
     extension: {
         onMessage: {
             addListener: function () {}
-        },            
+        },
     },
 
     runtime : {
@@ -2015,13 +2121,13 @@ const chrome = {
     action: {
         setBadgeText: function () {},
     },
-    
+
     commands: {
         onCommand: {
             addListener: function () {}
         },
     },
-    
+
     storage: {
 
         sync: {
@@ -2218,8 +2324,22 @@ function callDynamicHandlers() {
 }
 
 // Treat console.warn or .error like console.log.
-console.warn = console.log;
-console.error = console.log;
+const __origConsoleLog = console.log;
+console.warn = function() {
+	return __origConsoleLog.apply(console, arguments);
+};
+console.error = function() {
+	const parts = [];
+	for (let i = 0; i < arguments.length; i++) {
+		try {
+			parts.push(String(arguments[i]));
+		} catch (e) {
+			parts.push("[unprintable]");
+		}
+	}
+	lib.info(`console.error: ${parts.join(" ")}`);
+	return __origConsoleLog.apply(console, arguments);
+};
 
 // **********
 // Stubbed Node-JS functions.
@@ -2296,7 +2416,7 @@ function _createConnection(info, callback) {
         var url = "http://" + info.host;
         if (typeof(info.port) !== "undefined") {
             url += ":" + info.port;
-        }        
+        }
         logUrl('net.createConnection()', url);
     }
 
@@ -2306,7 +2426,7 @@ function _createConnection(info, callback) {
     }
     catch (e1) {
         console.log("net.createConnection() callback failed. " + e1.message);
-    }    
+    }
 
     // Return a stubbed connection object.
     return {
@@ -2615,6 +2735,7 @@ class MutationObserver {
     observe() {};
 };
 
+// Node constants.
 Node = {
     // For debugging.
     __name: "Node",
@@ -2629,7 +2750,7 @@ check_loader = "";
 
 // Node.js process object stubbing.
 process.env = {
-    USERPROFILE : "C:\Users\YourUsername",    
+    USERPROFILE : "C:\Users\YourUsername",
 }
 process.platform = "win32";
 
