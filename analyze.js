@@ -26,6 +26,16 @@ const child_process = require("child_process");
 const argv = require("./argv.js").run;
 const jsdom = require("jsdom").JSDOM;
 const dom = new jsdom(`<html><head></head><body></body></html>`);
+/* xmldom@0.6.0 carries a critical advisory (GHSA: "allows multiple root nodes in
+ * a DOM") with no fixed version — the package is unmaintained. It is retained
+ * DELIBERATELY. Swapping to the maintained @xmldom/xmldom@0.9 was measured and
+ * REVERTED: 0.9 produces behaviourally different documents, and on real samples
+ * box-js's MSXML emulation then takes a different branch and loses IOCs (corpus
+ * task3813: 15 IOCs -> 12, dropping an XMLHTTP fetch of a live C2). The advisory
+ * describes parser leniency, and nothing here makes a security decision from the
+ * DOM, so the detection loss is the worse trade. Re-attempt only with the
+ * document-behaviour difference pinned down and shimmed, validated on the corpus.
+ */
 const { DOMParser } = require("xmldom");
 const stripComments = require("strip-comments");
 
