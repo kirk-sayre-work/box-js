@@ -214,6 +214,18 @@ const tables = {
     }],
     win32_process: processes,
     win32_processstoptrace: [{"processname": "chrome.exe"}],
+    win32_processor: [
+        {
+            "architecture" : 9,
+            "deviceid" : "CPU0",
+            "loadpercentage" : 23,
+            "maxclockspeed" : 4600,
+            "numberofenabledcore" : 8,
+            "numberoflogicalprocessors" : 16,
+            "virtualizationfirmwareenabled" : true,
+            "name" : "Intel(R) Core(TM) Ultra 7 165U",
+        }
+    ],
 };
 
 const classes = {
