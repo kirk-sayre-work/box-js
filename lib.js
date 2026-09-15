@@ -3,6 +3,38 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const request = require("sync-request");
+const { HttpProxyAgent } = require("http-proxy-agent");
+const { HttpsProxyAgent } = require("https-proxy-agent");
+
+/**
+ * An http(s) agent that routes through `proxy`, or throw.
+ *
+ * Throwing is deliberate and is the whole point of the change: a proxy an analyst asked
+ * for and did not get must fail the run, not quietly download from their own IP. The
+ * agent is selected by the TARGET's scheme because an https:// target is tunnelled with
+ * CONNECT regardless of what the proxy speaks.
+ */
+function proxyAgentFor(url, proxy) {
+  let parsed;
+  try {
+    parsed = new URL(proxy);
+  } catch (e) {
+    throw new Error(
+      `--proxy ${proxy} is not a valid URL (expected e.g. http://host:3128)`
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    // SOCKS would need socks-proxy-agent, which is not a dependency. Say so rather
+    // than accept the flag and ignore the scheme.
+    throw new Error(
+      `--proxy only supports http(s) proxies; got ${parsed.protocol}//. For SOCKS, ` +
+        `route at the network layer instead.`
+    );
+  }
+  return url.toLowerCase().startsWith("https:")
+    ? new HttpsProxyAgent(proxy)
+    : new HttpProxyAgent(proxy);
+}
 const uuid = require("uuid");
 const argv = require("./argv.js").run;
 const fakeFiles = require("./emulator/FakeFiles");
@@ -394,7 +426,19 @@ module.exports = {
         timeout: 4000,
       };
       if (body) options.body = body;
-      if (argv.proxy) options.proxy = argv.proxy;
+      // --proxy USED TO BE SILENTLY DISCARDED. then-request's options have no `proxy`
+      // field (see then-request/lib/Options.d.ts), so setting one did nothing while the
+      // README advertised it as working. On a malware analysis tool that is a
+      // deanonymisation risk of exactly the worst kind: an analyst who believes their
+      // fetches are proxied gets them straight from their own address, and nothing in
+      // the output says otherwise.
+      //
+      // then-request DOES accept an `agent`, so route through one. The agent is chosen
+      // by the TARGET's scheme, not the proxy's — an https:// target needs
+      // HttpsProxyAgent (which CONNECTs) even when the proxy itself is plain http.
+      if (argv.proxy) {
+        options.agent = proxyAgentFor(url, argv.proxy);
+      }
 
       const file = request(method, url, options);
       Buffer.prototype.charCodeAt = function (index) {
