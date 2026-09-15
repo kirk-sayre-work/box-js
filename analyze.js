@@ -463,6 +463,9 @@ function add_crypto_require(code) {
     // Already have require("crypto")?
     if (code.match(/require\( *["']crypto["'] *\)/g)) return code;
 
+    // Function named crypto?
+    if (code.match(/function +crypto\(/g)) return code;
+    
     // No crypto require found. Does it look like crypto is being
     // used?
     if (!code.match("crypto")) return code;
