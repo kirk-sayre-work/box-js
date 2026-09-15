@@ -458,6 +458,20 @@ function rewrite_returns(code) {
     return r;
 }
 
+function add_crypto_require(code) {
+
+    // Already have require("crypto")?
+    if (code.match(/require\( *["']crypto["'] *\)/g)) return code;
+
+    // No crypto require found. Does it look like crypto is being
+    // used?
+    if (!code.match("crypto")) return code;
+
+    // crypto being used, no require. Add one.
+    const r = "const crypto = require('crypto');\n" + code;
+    return r;
+}
+
 function rewrite(code, useException=false) {
 
     // CL option given for no rewriting?
@@ -485,7 +499,11 @@ function rewrite(code, useException=false) {
     code = code.toString().replace(/"use strict"/g, '"STRICT MODE NOT SUPPORTED"');
     code = code.toString().replace(/'use strict'/g, "'STRICT MODE NOT SUPPORTED'");
     code = code.trim();
-    
+
+    // box-js needs an explicit import for use of the crypto
+    // package. Add that if needed.
+    code = add_crypto_require(code.toString());
+
     // The following 2 code rewrites should not be applied to patterns
     // in string literals. Hide the string literals first.
     //
@@ -509,7 +527,7 @@ function rewrite(code, useException=false) {
     code = code.toString().replace(/\^ +=/g, "^=");
     code = code.toString().replace(/= +>/g, "=>");
     code = code.toString().replace(/% +%/g, "%");
-
+    
     // WinHTTP ActiveX objects let you set options like 'foo.Option(n)
     // = 12'. Acorn parsing fails on these with a assigning to rvalue
     // syntax error, so rewrite things like this so we can parse
@@ -614,7 +632,7 @@ If you run into unexpected results, try uncommenting lines that look like
         let tree;
         try {
             //console.log("!!!! CODE FINAL !!!!");
-            //console.log(code);                
+            console.log(code);                
             //console.log("!!!! CODE FINAL !!!!");
             tree = acorn.parse(code, {
                 ecmaVersion: "latest",
