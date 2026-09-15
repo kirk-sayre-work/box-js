@@ -172,6 +172,37 @@ function runHarrington(bin, commands, timeoutSecs) {
     }
 }
 
+// Harrington emits DIAGNOSTIC traits alongside substantive ones. These say something
+// about Harrington's own run — a variable it could not resolve, a line it truncated —
+// and nothing about the sample. Measured over the 907-task corpus they dominate the
+// output: IfNotResolved 844, LineTruncated 247, which is more than every substantive
+// trait combined. Left in, the report reads as a wall of findings and an analyst stops
+// reading it; that is how a real trait gets missed.
+//
+// They are COUNTED, not discarded. "Harrington gave up on 12 variables in this command"
+// is itself worth knowing — it bounds how much of the deobfuscation to trust — it is
+// just not a finding about the malware.
+const DIAGNOSTIC_TRAITS = new Set(["IfNotResolved", "LineTruncated"]);
+
+function splitTraits(traits) {
+    const substantive = [];
+    const diagnostics = {};
+    for (const t of traits) {
+        const keep = {};
+        let kept = false;
+        for (const k of Object.keys(t)) {
+            if (DIAGNOSTIC_TRAITS.has(k)) {
+                diagnostics[k] = (diagnostics[k] || 0) + 1;
+            } else {
+                keep[k] = t[k];
+                kept = true;
+            }
+        }
+        if (kept) substantive.push(keep);
+    }
+    return { substantive, diagnostics };
+}
+
 function mergeUrls(dir, results) {
     const urlPath = path.join(dir, "urls.json");
     let urls = [];
@@ -220,18 +251,33 @@ function enrich(dir, opts = {}) {
     const run = runHarrington(bin, commands, opts.timeout || 10);
     if (run.error) return { skipped: run.error };
 
+    // URL extraction runs against the UNFILTERED traits on purpose: a LineTruncated
+    // trait still carries the text it truncated, and that text can still contain the
+    // second-stage URL. Filtering before this would throw away the payload with the
+    // noise.
     const addedUrls = mergeUrls(dir, run.results);
+
+    const filtered = run.results.map((r) => {
+        const { substantive, diagnostics } = splitTraits(r.traits);
+        return { ...r, traits: substantive, diagnostics };
+    });
     const report = {
         binary: bin,
         commands_analyzed: commands.length,
         urls_recovered: addedUrls,
-        results: run.results.filter((r) => r.traits.length || r.deobfuscated),
+        // Fleet-wide totals, so the noise is visible in one number instead of hundreds
+        // of entries.
+        diagnostics_suppressed: filtered.reduce((acc, r) => {
+            for (const [k, n] of Object.entries(r.diagnostics)) acc[k] = (acc[k] || 0) + n;
+            return acc;
+        }, {}),
+        results: filtered.filter((r) => r.traits.length || r.deobfuscated),
     };
     fs.writeFileSync(path.join(dir, "harrington.json"), JSON.stringify(report, null, "\t"));
     return report;
 }
 
-module.exports = { enrich, extractCommands, EXEC_IOCS };
+module.exports = { enrich, extractCommands, splitTraits, DIAGNOSTIC_TRAITS, EXEC_IOCS };
 
 if (require.main === module) {
     const args = process.argv.slice(2);

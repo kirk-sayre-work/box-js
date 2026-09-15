@@ -107,3 +107,52 @@ describe("eval() scope", function() {
 			"the warning must say why there is no workaround");
 	});
 });
+
+// ------------------------------------------------------- Harrington trait filtering
+
+describe("harrington-enrich trait filter", function() {
+	const h = require("../tools/harrington-enrich.js");
+
+	it("drops diagnostics and keeps substantive traits", function() {
+		// Over the 907-task corpus these two dominate: IfNotResolved 844,
+		// LineTruncated 247 — more than every substantive trait combined. Left in,
+		// the report is a wall of noise and an analyst stops reading it, which is how
+		// a real trait gets missed.
+		const { substantive, diagnostics } = h.splitTraits([
+			{ IfNotResolved: "%tmp%" },
+			{ LineTruncated: "powershell -enc AAA..." },
+			{ Downloads: "http://evil.test/p.exe" },
+		]);
+		assert.deepStrictEqual(substantive, [{ Downloads: "http://evil.test/p.exe" }]);
+		assert.deepStrictEqual(diagnostics, { IfNotResolved: 1, LineTruncated: 1 });
+	});
+
+	it("counts diagnostics rather than discarding them", function() {
+		// "Harrington gave up on 12 variables here" bounds how far to trust the
+		// deobfuscation. It is not a finding about the malware, but it is worth knowing.
+		const { diagnostics } = h.splitTraits([
+			{ IfNotResolved: "a" }, { IfNotResolved: "b" }, { IfNotResolved: "c" },
+		]);
+		assert.strictEqual(diagnostics.IfNotResolved, 3);
+	});
+
+	it("keeps a mixed trait's substantive half", function() {
+		const { substantive, diagnostics } = h.splitTraits([
+			{ IfNotResolved: "%appdata%", Persistence: "Run key" },
+		]);
+		assert.deepStrictEqual(substantive, [{ Persistence: "Run key" }]);
+		assert.strictEqual(diagnostics.IfNotResolved, 1);
+	});
+
+	it("leaves URL extraction reading the UNFILTERED traits", function() {
+		// A LineTruncated trait still carries the text it truncated, and that text can
+		// still contain the second-stage URL. Filtering before mergeUrls would throw
+		// away the payload with the noise.
+		const src = fs.readFileSync(path.join(boxDir, "tools/harrington-enrich.js"), "utf8");
+		const mergeAt = src.indexOf("const addedUrls = mergeUrls(dir, run.results)");
+		const filterAt = src.indexOf("const filtered = run.results.map(");
+		assert.ok(mergeAt !== -1 && filterAt !== -1);
+		assert.ok(mergeAt < filterAt,
+			"mergeUrls must run before the traits are filtered");
+	});
+});
