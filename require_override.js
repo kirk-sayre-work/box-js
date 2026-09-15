@@ -21,6 +21,7 @@ function require(arg) {
             createServer: _createServer,
         },
         "request" : {
+            get: _requestGet,
         },
         "socket.io-client" : _io_client,
         "axios" : {

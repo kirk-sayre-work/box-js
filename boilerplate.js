@@ -850,7 +850,9 @@ const __stubbed_then = {
         catch (e) {
             lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
         }        
+        return __stubbed_then;
     },
+    catch: function(f) { return __stubbed_then; },
 }
 
 // Fake up the on() method. This dict can be returned by methods
@@ -2430,9 +2432,16 @@ function _axiosGet(url) {
             }
             catch (e) {
                 lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
-            }        
+            }
+            return __stubbed_then;
         },
     };
+}
+
+// Stubbed Node request functions.
+function _requestGet(url) {
+    logIOC('request.get()', {url: url}, "The script made a GET request with request.get().");
+    lib.logUrl('request.get()', url);
 }
 
 // Stubbed Node node-machine-id functions.
