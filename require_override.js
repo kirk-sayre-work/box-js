@@ -42,6 +42,7 @@ function require(arg) {
             mkdirSync : _mkdirSync,
             existsSync : _existsSync,
             statSync : _statSync,
+            unlinkSync: _unlinkSync,
         },
         "os" : {
             hostname: _NODE_os_hostname,
@@ -52,7 +53,8 @@ function require(arg) {
             cpus: _NODE_os_cpus,
             uptime: _NODE_os_uptime,
             userInfo: _NODE_os_userInfo,
-            hostname: _NODE_os_hostname,
+            homedir: _NODE_os_homedir,
+            tmpdir: _NODE_os_tmpdir,
             networkInterfaces: _NODE_os_networkInterfaces,
         },
         "tls" : _tls,
