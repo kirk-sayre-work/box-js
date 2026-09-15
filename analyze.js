@@ -2840,6 +2840,38 @@ if (argv["dangerous-vm"]) {
         return vmRef.run(rewrittenCode);
       } catch (e) {
         libRef.warning(`eval() execution failed: ${e.message}`);
+        // A ReferenceError here is usually NOT the sample's fault, and an analyst who
+        // does not know that will go looking for a bug in the malware.
+        //
+        // vm2 does not preserve the caller's scope for a DIRECT eval. Measured against
+        // vm2 3.12.1, with no box-js involved at all:
+        //
+        //     new VM().run('function f(){var s="x"; return eval("s");} f();')
+        //       -> ReferenceError: s is not defined
+        //     require("vm").runInNewContext(<the same source>)
+        //       -> "x"
+        //
+        // No VM option changes it ({}, {eval:true}, {wasm:false,eval:true} all fail), so
+        // it cannot be configured away. It is also NOT caused by the override above,
+        // which an earlier reading of this code wrongly blamed: removing the override
+        // entirely leaves the behaviour identical.
+        //
+        // AND THERE IS NO WORKAROUND FLAG. `--dangerous-vm` would select node's own vm,
+        // which scopes eval correctly, but this fork disables it (analyze.js: "SECURITY
+        // FIX: Dangerous-vm flag disabled for security"). So do not send the analyst
+        // there — the flag silently does nothing. Say what is true: the eval'd source is
+        // logged immediately above, and that is what there is to work with.
+        //
+        // Obfuscated droppers hit this constantly: build a string in a local, eval it.
+        if (e instanceof ReferenceError) {
+          libRef.warning(
+            "This is very likely vm2's limitation, NOT a fault in the sample: vm2 runs " +
+            "a direct eval() without the caller's local scope, so a variable defined in " +
+            "the enclosing function is invisible to it. No flag fixes this " +
+            "(--dangerous-vm is disabled in this build). The eval'd source is logged " +
+            "immediately above; deobfuscate it by hand, or inline the variable and re-run."
+          );
+        }
         throw e;
       }
     };

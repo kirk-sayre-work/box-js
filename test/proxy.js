@@ -72,3 +72,38 @@ describe("--proxy", function() {
 		assert.ok(pkg.dependencies["https-proxy-agent"]);
 	});
 });
+
+// ---------------------------------------------------------------- eval scope (vm2)
+
+describe("eval() scope", function() {
+	// This is documented as a TEST rather than a comment because the cause was
+	// misdiagnosed once already: the `sandbox.eval` override was blamed, and removing
+	// it changes nothing. The cause is vm2 itself.
+	it("is a vm2 limitation, not a box-js one", function() {
+		const { VM } = require("vm2");
+		const src = 'function f(){var s="S3CR3T"; return eval("s");} f();';
+
+		// node's own vm scopes a direct eval correctly...
+		assert.strictEqual(require("vm").runInNewContext(src), "S3CR3T");
+
+		// ...vm2 does not, in any configuration.
+		for (const opts of [{}, { eval: true }, { wasm: false, eval: true }]) {
+			assert.throws(() => new VM(opts).run(src), /is not defined/,
+				`vm2 ${JSON.stringify(opts)} unexpectedly scoped eval correctly — if this
+				 now passes, the warning in analyze.js should be removed`);
+		}
+	});
+
+	it("warns the analyst without pointing at a disabled flag", function() {
+		// --dangerous-vm would fix it and is disabled in this fork, so recommending it
+		// would send the analyst to a flag that silently does nothing.
+		const analyze = fs.readFileSync(path.join(boxDir, "analyze.js"), "utf8");
+		const start = analyze.indexOf("vm2's limitation");
+		assert.notStrictEqual(start, -1, "the ReferenceError warning must exist");
+		const warning = analyze.slice(start, start + 600);
+		assert.ok(!/Re-run with --dangerous-vm/.test(warning),
+			"must not recommend --dangerous-vm; this build disables it");
+		assert.ok(/--dangerous-vm is disabled in this build/.test(warning),
+			"the warning must say why there is no workaround");
+	});
+});
