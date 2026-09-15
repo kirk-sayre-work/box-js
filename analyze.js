@@ -632,7 +632,7 @@ If you run into unexpected results, try uncommenting lines that look like
         let tree;
         try {
             //console.log("!!!! CODE FINAL !!!!");
-            console.log(code);                
+            //console.log(code);                
             //console.log("!!!! CODE FINAL !!!!");
             tree = acorn.parse(code, {
                 ecmaVersion: "latest",
