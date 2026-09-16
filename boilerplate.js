@@ -2626,6 +2626,12 @@ const _crypto = {
     createDecipheriv: function(a1, a2, a3, a4) {
         return fullCrypto.createDecipheriv(a1, a2, a3, a4);
     },
+    createHash: function(a1, a2, a3, a4) {
+        return fullCrypto.createHash(a1, a2, a3, a4);
+    },
+    randomBytes: function(a1, a2, a3, a4) {
+        return fullCrypto.randomBytes(a1, a2, a3, a4);
+    },
     randomUUID: function() {
         // We want determistic analysis runs, so return a fixed UUID.
         return "550e8400-e29b-41d4-a716-946658440103";
