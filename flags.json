@@ -45,7 +45,17 @@
         {
             "name": "timeout",
             "type": "Number",
-            "description": "The script will timeout after this many seconds (default 10)"
+            "description": "The script will timeout after this many seconds (default 10). Also used as the default for --strip-timeout and --preprocess-timeout if they are not set."
+        },
+        {
+            "name": "strip-timeout",
+            "type": "Number",
+            "description": "Comment stripping will timeout after this many seconds (defaults to --timeout value)"
+        },
+        {
+            "name": "preprocess-timeout",
+            "type": "Number",
+            "description": "Uglify-es preprocessing will timeout after this many seconds (defaults to --timeout value)"
         },
         {
             "name": "output-dir",
@@ -118,6 +128,26 @@
             "description": "Do not rewrite the source code at all, other than for `@cc_on` support"
         },
         {
+            "name": "harrington",
+            "type": "Boolean",
+            "description": "After emulation, run every recorded execution IOC through Harrington (the Rust batch/PowerShell deobfuscator) to recover second-stage commands and URLs. Writes harrington.json and merges recovered URLs into urls.json."
+        },
+        {
+            "name": "harrington-bin",
+            "type": "String",
+            "description": "Path to the harrington/batdeob binary (default: $HARRINGTON_BIN, else the first of batdeob/harrington on PATH)."
+        },
+        {
+            "name": "harrington-timeout",
+            "type": "Number",
+            "description": "Per-command Harrington analysis timeout in seconds (default 10). Runs after emulation, so it does not share the --timeout budget."
+        },
+        {
+            "name": "rewrite-max-size",
+            "type": "Number",
+            "description": "Skip AST rewriting and uglify preprocessing for samples larger than this many bytes (default 1000000). Rewriting a multi-MB sample can consume the entire --timeout budget before emulation starts."
+        },
+        {
             "name": "no-catch-rewrite",
             "type": "Boolean",
             "description": "Do not rewrite try..catch clauses to make the exception global-scoped"
@@ -137,11 +167,11 @@
             "type": "Boolean",
             "description": "Return `false` for Scripting.FileSystemObject.FileExists(x)"
         },
-	    {
+        {
             "name": "limit-file-checks",
             "type": "Boolean",
             "description": "Switch default value for folder/file exists checks if many checks are performed (try to break infinite file check loops)."
-        },	
+        },
         {
             "name": "no-folder-exists",
             "type": "Boolean",
@@ -228,27 +258,42 @@
             "description": "Ignore calls to WSCript.Quit() and continue execution."
         },
         {
+            "name": "decode-uri-component-as-ioc",
+            "type": "Boolean",
+            "description": "Log Unique decodeURIComponent results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
+        },
+        {
+            "name": "decode-unescape-as-ioc",
+            "type": "Boolean",
+            "description": "Log Unique unescape results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
+        },
+        {
+            "name": "decode-uri-as-ioc",
+            "type": "Boolean",
+            "description": "Log Unique decodeURI results as IOC's will dedupe from decodeURI/DecodeURIComponent/unescape"
+        },
+        {
             "name": "ignore-returns",
             "type": "Boolean",
             "description": "Ignore return statements with no values (just used for control flow) and continue execution."
         },
-	    {
+        {
             "name": "ignore-rewrite-errors",
             "type": "Boolean",
             "description": "Analyze original sample if any sample rewrites fail."
         },
-	    {
+        {
             "name": "use-old-date",
             "type": "Boolean",
             "description": "Lie about the current date/time and return an old date."
         },
-	    {
+        {
             "name": "dump-vars",
             "alias": "d",
             "type": "Boolean",
             "description": "Look at all defined variables in script and dump interesting variable values to files for later analysis."
-	    },
-	    {
+        },
+        {
             "name": "check",
             "alias": "c",
             "type": "Boolean",

@@ -127,8 +127,11 @@ cat ./*.results/active_urls.json | sort | uniq
                                script will attempt to poll every site)                                         
     --no-typeof-rewrite        Do not rewrite `typeof` (e.g. `typeof ActiveXObject`, which must return         
                                'unknown' in the JScript standard and not 'object')                             
-    --proxy                    [experimental] Use the specified proxy for downloads. This is not relevant if   
-                               the --download flag is not present.                                             
+    --proxy                    Route --download fetches through an http(s) proxy (e.g.                       
+                               http://host:3128). SOCKS is not supported and is REFUSED rather                
+                               than ignored; route it at the network layer instead. An                        
+                               unreachable or malformed proxy FAILS the run — it never falls                  
+                               back to a direct download. Not relevant without --download.                     
     --windows-xp               Emulate Windows XP (influences the value of environment variables)              
     --dangerous-vm             Use the `vm` module, rather than `vm2`. This sandbox can be broken, so **don't  
                                use this** unless you're 100% sure of what you're doing. Helps with debugging by

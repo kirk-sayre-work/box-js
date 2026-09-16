@@ -16,6 +16,11 @@ TaskFolderObject = {
             args: taskObj.args,
             workingDir: taskObj.workingDir,
         };
+        // Give consumers a ready-to-analyze invocation rather than making
+        // them rejoin path and args themselves.
+        taskInfo.command = [taskObj.path, taskObj.args]
+            .filter(function(x) { return typeof(x) !== "undefined" && x !== null && x !== ""; })
+            .join(" ");
         if (typeof(taskObj.triggerObj) != "undefined") {
             taskInfo.triggerId = taskObj.triggerObj.id;
             taskInfo.triggerUserId = taskObj.triggerObj.userId;
