@@ -520,13 +520,13 @@ function rewrite(code, useException=false) {
     // Don't do this for huge samples.
     if (code.length < 2e6) {
         var rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[;])/g;
-        var rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[;]))/g;
-        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
+        var rvaluePat1 = /([\n;])([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[;]))/g;
+        code = code.toString().replace(rvaluePat1, "$1$2.rvalAssign($3, $4)");
         //code = code.toString().replace(rvaluePat, ';/* ASSIGNING TO RVALUE */');
 
         rvaluePat = /[\n;][^\n^;]*?\([^\n^;]+?\)\s*=[^=^>][^\n^;]+?\r?(?=[\n])/g;
-        rvaluePat1 = /[\n;]([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[\n]))/g;
-        code = code.toString().replace(rvaluePat1, "$1.rvalAssign($2, $3)");
+        rvaluePat1 = /([\n;])([^\n^;]*?)\(([^\n^;]+?)\)\s*=([^=^>][^\n^;]+?\r?(?=[\n]))/g;
+        code = code.toString().replace(rvaluePat1, "$1$2.rvalAssign($3, $4)");
         //code = code.toString().replace(rvaluePat, ';// ASSIGNING TO RVALUE');
 
         //console.log("!!!! CODE: 2 !!!!");
