@@ -850,7 +850,9 @@ const __stubbed_then = {
         catch (e) {
             lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
         }        
+        return __stubbed_then;
     },
+    catch: function(f) { return __stubbed_then; },
 }
 
 // Fake up the on() method. This dict can be returned by methods
@@ -2254,6 +2256,7 @@ var process = {
     },
     cwd: function () { return "C:\Users\YourUsername" },
     platform : "win32",
+    pid: 8457,
 }
 
 // Stubbed Node spawn() function.
@@ -2423,7 +2426,22 @@ function _axiosGet(url) {
     lib.logUrl('axios.get()', url);
     return {
         "data" : "",
+        then: function(f) {
+            try {
+                f("fake");
+            }
+            catch (e) {
+                lib.info("Stubbed .then() function execution failed. Continuing analysis anyway.");
+            }
+            return __stubbed_then;
+        },
     };
+}
+
+// Stubbed Node request functions.
+function _requestGet(url) {
+    logIOC('request.get()', {url: url}, "The script made a GET request with request.get().");
+    lib.logUrl('request.get()', url);
 }
 
 // Stubbed Node node-machine-id functions.
@@ -2447,6 +2465,14 @@ var __dirname = "C:/Users/legituser/Downloads"
 // Stubbed Node os functions/fields.
 function _NODE_os_hostname() {
     return "mylegitdomain";
+};
+
+function _NODE_os_homedir() {
+    return "C:/Users/legituser/";
+};
+
+function _NODE_os_tmpdir() {
+    return "C:/Users/Temp/";
 };
 
 function _NODE_os_userInfo() {
@@ -2599,6 +2625,12 @@ const _crypto = {
     },
     createDecipheriv: function(a1, a2, a3, a4) {
         return fullCrypto.createDecipheriv(a1, a2, a3, a4);
+    },
+    createHash: function(a1, a2, a3, a4) {
+        return fullCrypto.createHash(a1, a2, a3, a4);
+    },
+    randomBytes: function(a1, a2, a3, a4) {
+        return fullCrypto.randomBytes(a1, a2, a3, a4);
     },
     randomUUID: function() {
         // We want determistic analysis runs, so return a fixed UUID.
@@ -2805,6 +2837,11 @@ function _existsSync(path) {
     logIOC("existsSync()", path, "The script checked to see if '" + path + "' exists.");
     if (argv["no-folder-exists"]) return false;
     return true;
+}
+
+// Stubbed fs.unlinkSync().
+function _unlinkSync(path) {
+    logIOC("unlinkSync()", path, "The script unlinked '" + path + "'.");
 }
 
 // Stubbed fs.statSync().
