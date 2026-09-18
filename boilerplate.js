@@ -1125,6 +1125,10 @@ var document = {
             
         }
 
+        // We don't know about the element. Return nothing if running
+        // with the -no-fake-elements flag.
+        if (argv["no-fake-elements"]) return null;
+        
         // Have we already made a fake element for this ID?
         if (typeof(generatedElements[id]) !== "undefined") return generatedElements[id];
         

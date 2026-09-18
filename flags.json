@@ -137,6 +137,11 @@
             "type": "Boolean",
             "description": "Return `false` for Scripting.FileSystemObject.FileExists(x)"
         },
+        {
+            "name": "no-fake-elements",
+            "type": "Boolean",
+            "description": "Do not return fake element objects for calls to things like getElementById() when the element is missing."
+        },
 	    {
             "name": "limit-file-checks",
             "type": "Boolean",
