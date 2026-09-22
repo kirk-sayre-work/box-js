@@ -681,7 +681,7 @@ cc decoder.c -o decoder
         const partial_code = code;
         
         //console.log("!!!! CODE: 4 !!!!");
-        //console.log(code);                
+        //console.log(escodegen.generate(tree));
         //console.log("!!!! CODE: 4 !!!!");
         
         // Loop rewriting is looking for loops in the original unmodified code so
@@ -881,6 +881,10 @@ cc decoder.c -o decoder
         //console.log("!!!! CODE: 14 !!!!");
         //console.log(code);                
         //console.log("!!!! CODE: 14 !!!!");
+
+        // escodegen has a bug handling ASTs with new.target. Fix the
+        // code here.
+        code = code.replace(/\[object Object\]\.\[object Object\]/g, "new.target");
         
         // The modifications may have resulted in more concatenations, eg. "a" + ("foo", "b") + "c" -> "a" + "b" + "c"
         if (argv["dumb-concat-simplify"]) {
@@ -904,7 +908,7 @@ cc decoder.c -o decoder
             process.exit(3);
         }
     }
-
+    
     return code;
 }
 
