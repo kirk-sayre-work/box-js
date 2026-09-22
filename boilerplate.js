@@ -6,6 +6,18 @@ const nodeUtil = require('util');
 const { Buffer } = require('node:buffer');
 const LocalTextDecoder = require("./local_text_decoder.js");
 
+// box-js rewrites return statements that return a local variable to
+// check the variable to see if it is a URL (handle string decode
+// functions). This is the function added by box-js paired with a
+// return statement to check/track deocded URLs.
+function __urlCheck(s) {
+    s = "" + s;
+    if (s.startsWith("http://") || s.startsWith("https://") || s.startsWith("ftp://")) {
+        logIOC('decode', {s}, "The script potentially decoded a URL.");
+        logUrl('decode', s);
+    }
+};
+
 // Save event listener functions. Event listener callbacks may change
 // the state of the DOM and exhibit different functionality when
 // called again, so save the callback functions so we can call them
