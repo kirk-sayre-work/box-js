@@ -11,7 +11,7 @@ const LocalTextDecoder = require("./local_text_decoder.js");
 // functions). This is the function added by box-js paired with a
 // return statement to check/track deocded URLs.
 function __urlCheck(s) {
-    s = "" + s;
+    if (typeof s !== "string") return;
     if (s.startsWith("http://") || s.startsWith("https://") || s.startsWith("ftp://")) {
         logIOC('decode', {s}, "The script potentially decoded a URL.");
         logUrl('decode', s);
