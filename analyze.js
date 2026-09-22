@@ -814,7 +814,9 @@ cc decoder.c -o decoder
         //console.log(escodegen.generate(tree));                
         //console.log("!!!! CODE: 10 !!!!");
         
-        if (!argv["no-typeof-rewrite"]) {
+        //if (!argv["no-typeof-rewrite"]) {
+        // Need to revisit what this does and why it is needed.
+        if (false) {
             lib.verbose("    Rewriting typeof calls (use --no-typeof-rewrite to skip)...", false);
             traverse(tree, function(key, val) {
                 if (!val) return;
