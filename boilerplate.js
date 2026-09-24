@@ -920,8 +920,7 @@ const navigator = {
     keyboard: {
     },
     language: "english",
-    languages: {
-    },
+    languages: ["english", "spanish"],
     locks: {
     },
     plugins: ["plugin1", "plugin2", "plugin3"],
