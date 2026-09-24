@@ -1905,6 +1905,9 @@ function fetch(url, data) {
     const r = {
         ok : true,
         json : function() { return "1"; },
+        arrayBuffer : function() {
+            return new ArrayBuffer();
+        },
     };
     const p = new Promise((resolve, reject) => {
         resolve(r);
@@ -2276,6 +2279,11 @@ var process = {
 
 // Stubbed Node spawn() function.
 function _spawn(file, args) {
+    if (Array.isArray(file)) {
+        var tmp = ""
+        for (const chunk of file) tmp += "" + chunk + " ";
+        file = tmp;
+    }
     logIOC('process spawn()', {file: file, args: args}, "The script spawned a process with spawn().");
     return {
         __name: "_spawn",
@@ -3208,4 +3216,23 @@ $.NSWorkspaceOpenConfiguration = {
 // JXA stubbing.
 $.NSTask = {
     alloc: _alloc,
+};
+
+// Bun stubbing
+const Bun = {
+    spawn: _spawn,
+    write: function (path, buffer) {
+        _writeFileSync(path, buffer);
+        /*const r = {
+            ok : true,
+            json : function() { return "1"; },
+            arrayBuffer : function() {
+                return new ArrayBuffer();
+            },
+        };
+        const p = new Promise((resolve, reject) => {
+            resolve(r);
+        });
+        return p;*/
+    },
 };

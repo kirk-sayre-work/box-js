@@ -91,7 +91,13 @@ function log(tag, text, toFile = true, toStdout = true) {
 }
 
 function hash(algo, string) {
-    return crypto.createHash(algo).update(string).digest("hex");
+    try {
+        return crypto.createHash(algo).update(string).digest("hex");
+    }
+    catch (e) {
+        log("error", `Computing hash failed. ${e}`);
+        return "???";
+    }
 }
 
 const getUUID = uuid.v4;
@@ -384,7 +390,13 @@ module.exports = {
 
         // Save the new file contents. Save as binary data to make
         // sure we dump the exact bytes to disk.
-        fs.writeFileSync(filePath, content, "binary");
+        try {
+            fs.writeFileSync(filePath, content, "binary");
+        }
+        catch (e) {
+            log("error", `Writing file ${filePath} failed. ${e}`);
+            fs.writeFileSync(filePath, "" + e, "binary");
+        }
 
         // Don't spam lots of file write info to same file.
         if (typeof(fileWriteCount[filePath]) == "undefined") fileWriteCount[filePath] = 0;
