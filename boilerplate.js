@@ -597,6 +597,8 @@ function __getElementsByTagName(tag) {
     }
 };
 
+var Notification = {};
+
 var __currSelectedVal = undefined;
 var __fakeParentElem = undefined;
 var dynamicOnclickHandlers = [];
@@ -619,6 +621,13 @@ function __createElement(tag) {
             postMessage: function () {},
         },
         myType: "Element",
+        toDataURL: function() {},
+        getContext: function () {
+            return {
+                getExtension: function() {},
+                fillText: function() {},
+            };
+        },
         set src(url) {
 
             // Looks like you can leave off the http from the url.
@@ -1153,6 +1162,7 @@ var document = {
     },
     style: {
         "display" : "none",
+        setProperty: function () {},
     },
     className: "",
     documentElement: {
@@ -1385,7 +1395,9 @@ class XMLHttpRequest {
 
 dataLayer = [];
 
-class dummyClass {};
+class dummyClass {
+    close() {};
+};
 
 // Stubbed intl-tel-input constructor (https://github.com/jackocnr/intl-tel-input).
 _intlTelInput = function () {
@@ -1407,6 +1419,7 @@ function makeWindowObject() {
         // For debugging.
         __name: "window",
 
+        AudioContext: dummyClass,
         HTMLIFrameElement: dummyClass,
         get park() {
             if (typeof(this._park) === "undefined") this._park = '???';
@@ -1905,9 +1918,13 @@ function fetch(url, data) {
     const r = {
         ok : true,
         json : function() { return "1"; },
-        text : function() { return "1"; },
+        // Fake some WordPress admin results.
+        text : function() { return "1wp-admin _wpnonce\" value=\"ffffffffff\""; },
         arrayBuffer : function() {
             return new ArrayBuffer();
+        },
+        blob : function() {
+            return new Blob([]);
         },
     };
     const p = new Promise((resolve, reject) => {
@@ -3237,3 +3254,6 @@ const Bun = {
         return p;*/
     },
 };
+
+// bogus.
+var bp = "";
