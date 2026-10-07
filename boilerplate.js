@@ -1905,6 +1905,7 @@ function fetch(url, data) {
     const r = {
         ok : true,
         json : function() { return "1"; },
+        text : function() { return "1"; },
         arrayBuffer : function() {
             return new ArrayBuffer();
         },
