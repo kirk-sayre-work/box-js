@@ -31,6 +31,10 @@ const decodedBase64 = new Set();
 decodeURIComponent = (function(_super) {
     return function() {
 
+        // Track whether to report this call as an IOC or not.
+        var track = arguments[1];
+        if (typeof(track) == "undefined") track = true;
+        
         // Has a URL?
         const r = _super.apply(this, arguments);
         const urls = r.match(/https?:\/\/[^\s^'^"]+/g);
@@ -38,12 +42,12 @@ decodeURIComponent = (function(_super) {
             var newUrl = false;
             for (const url of urls) {
                 if (!decodedURLs.has(url)) {
-                    logUrl('decodeURIComponent()', url);
+                    if (track) logUrl('decodeURIComponent()', url);
                     newUrl = true;
                 }
                 decodedURLs.add(url);
                 if (newUrl) {
-                    logIOC("decodeURIComponent()", r, "The script decoded a URL with decodeURIComponent().")
+                    if (track) logIOC("decodeURIComponent()", r, "The script decoded a URL with decodeURIComponent().")
                 }
             }
         }
@@ -58,7 +62,7 @@ decodeURIComponent = (function(_super) {
                 }
                 decodedURLs.add(b64);
                 if (newBase64) {
-                    logIOC("decodeURIComponent()", r, "The script decoded a base64 blob with decodeURIComponent().")
+                    if (track) logIOC("decodeURIComponent()", r, "The script decoded a base64 blob with decodeURIComponent().")
                 }
             }
         }
@@ -622,6 +626,7 @@ function __createElement(tag) {
         },
         myType: "Element",
         toDataURL: function() {},
+        submit: function() {},
         getContext: function () {
             return {
                 getExtension: function() {},
@@ -653,6 +658,11 @@ function __createElement(tag) {
         },
         set value(txt) {
             this.val = txt;
+            const s = decodeURIComponent(txt, false);
+            if (s.startsWith("http://") || s.startsWith("https://") || s.startsWith("ftp://")) {
+                logIOC('value', {s}, "The script set the value of a HTML element to a URL.");
+                logUrl('value', s);
+            }
         },
         get value() {
             return this.val;

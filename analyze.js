@@ -490,6 +490,19 @@ function rewrite(code, useException=false) {
         return code;
     }
     lib.verbose("Rewriting code...", false);
+
+    // Strip BOM bytes.
+    var startPos = 0;
+    while ((startPos < code.length) &&
+           ((code.charCodeAt(startPos) > 0x7e) ||
+            ((code.charCodeAt(startPos) < 0x20) &&
+             (code[startPos] != "\n") &&
+             (code[startPos] != "\t") &&
+             (code[startPos] != "\r")))) {
+        startPos++;
+    }
+    code = code.slice(startPos);
+    code = code.replaceAll("ï»¿", "");
     
     //console.log("!!!! CODE: 0 !!!!");
     //console.log(code);                
@@ -646,6 +659,8 @@ If you run into unexpected results, try uncommenting lines that look like
                 },
             });
         } catch (e) {
+            //console.log(code);
+            //console.log(e);
             if (useException) return 'throw("Parse Error")';
             lib.error("Couldn't parse with Acorn:");
             lib.error(e);
