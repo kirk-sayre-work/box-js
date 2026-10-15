@@ -1400,7 +1400,12 @@ class XMLHttpRequest {
         lib.logIOC("XMLHttpRequest", {field: field, value: val}, "The script set a HTTP header value.");
     };
     
-    send() {};
+    send(data) {
+        if (this.url) {
+            lib.logIOC("XMLHttpRequest", {url: this.url, data: {method: this.method, body: data}}, "The script sent data with a HTTP request.");
+            lib.logUrl("XMLHttpRequest", this.url);
+        }
+    };
 };
 
 dataLayer = [];
