@@ -1953,6 +1953,7 @@ class Image {
 
     // For debugging.
     __name = "Image";
+    style = {};
     
     set src(url) {
 
