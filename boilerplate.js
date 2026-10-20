@@ -2059,6 +2059,42 @@ const chrome = {
                 callback(1, info, "tab1");
             },
         },
+        onStartup: {
+            addListener: function (callback) {
+                // (tabId, changeInfo, tab)
+                info = {
+                    url: fakeUrl,
+                };
+                callback(1, info, "tab1");
+            },
+        },
+        onMessage: {
+            addListener: function (callback) {
+                // (tabId, changeInfo, tab)
+                info = {
+                    url: fakeUrl,
+                };
+                callback(1, info, "tab1");
+            },
+        },
+        onInstalled: {
+            addListener: function (callback) {
+                // (tabId, changeInfo, tab)
+                info = {
+                    url: fakeUrl,
+                };
+                callback(1, info, "tab1");
+            },
+        },
+        onActivated: {
+            addListener: function (callback) {
+                // (tabId, changeInfo, tab)
+                info = {
+                    url: fakeUrl,
+                };
+                callback(1, info, "tab1");
+            },
+        },
         onRemoved: {
             addListener: function () {}
         },
@@ -2101,6 +2137,7 @@ const chrome = {
         },
     }
 };
+chrome.runtime = chrome.tabs;
 
 Modernizr = {
     // For debugging.
