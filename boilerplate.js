@@ -2360,7 +2360,9 @@ function _spawn(file, args) {
         __name: "_spawn",
         unref: function () {},
         kill: function () {},
-        on: function() {},
+        on: function(event, callback) {
+            callback(0);
+        },
         stderr: {
             on: function() {},
         },
