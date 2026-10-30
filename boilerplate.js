@@ -639,6 +639,7 @@ function __createElement(tag) {
             if (url.startsWith("//")) url = "https:" + url;
 
             // Is the script source base64 encoded?
+            var gotDomAdd = false;
             if (url.startsWith("data:text/html;base64,")) {
 
                 // Strip off the HTML info.
@@ -646,6 +647,7 @@ function __createElement(tag) {
 
                 // Decode the base64.
                 url = atob(url);
+                gotDomAdd = true;
             }
             if (url.startsWith("data:text/javascript;base64,")) {
 
@@ -654,11 +656,18 @@ function __createElement(tag) {
 
                 // Decode the base64.
                 url = atob(url);
+                gotDomAdd = true;
             }
 
             // Save the IOC.
-            logIOC('Remote Script', {url}, "The script set a remote script source.");
-            logUrl('Remote Script', url);
+            if (gotDomAdd) {
+                const content = url;
+                logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
+            }
+            else {
+                logIOC('Remote Script', {url}, "The script set a remote script source.");
+                logUrl('Remote Script', url);
+            }
         },
         set onerror(func) {
             // Call the onerror handler.
@@ -1826,6 +1835,14 @@ jQuery.get = function(url) {
 };
 // Looks like that can be a window field.
 window.jQuery = jQuery
+
+// JQuery JCaption class stub.
+class JCaption {
+
+    constructor() {
+        this._decoder = new _TextDecoder();
+    };
+}
 
 // TextEncoder support.
 const TextEncoder = nodeUtil.TextEncoder;
