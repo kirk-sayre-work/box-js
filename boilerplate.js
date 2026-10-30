@@ -647,6 +647,14 @@ function __createElement(tag) {
                 // Decode the base64.
                 url = atob(url);
             }
+            if (url.startsWith("data:text/javascript;base64,")) {
+
+                // Strip off the HTML info.
+                url = url.slice("data:text/javascript;base64,".length)
+
+                // Decode the base64.
+                url = atob(url);
+            }
 
             // Save the IOC.
             logIOC('Remote Script', {url}, "The script set a remote script source.");
