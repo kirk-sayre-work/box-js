@@ -1281,10 +1281,8 @@ var document = {
     },
     getSelection: function () {},
     postMessage: function () {},
-    currentScript: {
-        src: "mylegitdomain.com",
-    },
 };
+document.currentScript.src = "mylegitdomain.com";
 document.documentElement = document;
 const fixit = document;
 
@@ -2217,6 +2215,11 @@ class URLSearchParams {
     constructor() {};
     get() {};
     append() {};
+    set(p1, p2) {
+    };
+    toString() {
+        return "URL_SEARCH_PARAMS";
+    };
 }
 
 // Very stubbed NodeFilter "class".
