@@ -2268,10 +2268,14 @@ function jwplayer(arg) {
 }
 
 // Stubbed performance object.
+var perfUpdate = 0;
 performance = {
     // For debugging.
     __name: "performance",
-    now: function() { return 51151.43; },
+    now: function() {
+        perfUpdate += 500;
+        return (51151.43 + perfUpdate);
+    },
 }
 
 // (Very) stubbed DOMParser class.
