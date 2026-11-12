@@ -495,9 +495,15 @@ tagNameMap = {
     /* !! ADD TAG TO VALUE MAPPINGS HERE !! */
 };
 
+function resolveFakeElem(v) {
+    if (v.__name == "fake_elem") return "FAKE_ELEMENT";
+    return v;
+}
+
 function __makeFakeElem(data) {
 
     var func = function(content) {
+        content = resolveFakeElem(content);
         logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
         const urls = pullActionUrls(content);
         if (typeof(urls) !== "undefined") {
@@ -661,7 +667,8 @@ function __createElement(tag) {
 
             // Save the IOC.
             if (gotDomAdd) {
-                const content = url;
+                var content = url;
+                content = resolveFakeElem(content);
                 logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
             }
             else {
@@ -793,6 +800,7 @@ function __createElement(tag) {
             if (typeof(this.onclick) !== "undefined") this.onclick();
         },
         insertAdjacentHTML: function(position, content) {
+            content = resolveFakeElem(content);
             logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
             const urls = pullActionUrls(content);
             if (typeof(urls) !== "undefined") {
@@ -1006,6 +1014,7 @@ const navigator = {
 };
 
 var _generic_append_func = function(content) {
+    content = resolveFakeElem(content);
     logIOC('DOM Write', {content}, "The script added a HTML node to the DOM");
     const urls = pullActionUrls(content);
     if (typeof(urls) !== "undefined") {
@@ -2864,6 +2873,7 @@ google = {
                 loadedInfo = JSON.parse(content);
                 if (typeof(loadedInfo.userHtml) !== "undefined") {
                     content = html = loadedInfo.userHtml;
+                    content = resolveFakeElem(content);
                     logIOC("DOM Write", {content}, "The script added a HTML node to the DOM");
                     const urls = pullActionUrls(html);
                     if (typeof(urls) !== "undefined") {
