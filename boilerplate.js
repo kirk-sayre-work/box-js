@@ -1597,7 +1597,7 @@ function makeWindowObject() {
 
     return window;
 }
-window = makeWindowObject();
+window = lib.makeDefaultDict({"cookies" : {}}, makeWindowObject());
 window.self = window;
 window.top = window;
 self = window;

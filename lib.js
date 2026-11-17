@@ -239,15 +239,16 @@ function doWscriptQuit(flag) {
 }
 
 class DefaultDict {
-    constructor(defaultVal) {
-        return new Proxy({}, {
+    constructor(defaultVal, baseMap) {
+        if (typeof(baseMap) === "undefined") baseMap = {};
+        return new Proxy(baseMap, {
             get: (target, name) => name in target ? target[name] : defaultVal
         })
     }
 };
 
-function makeDefaultDict(i) {
-    return new DefaultDict(i);
+function makeDefaultDict(defaultVal, baseMap) {
+    return new DefaultDict(defaultVal, baseMap);
 };
 
 module.exports = {
