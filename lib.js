@@ -55,51 +55,193 @@ if (process.argv[3]) {
 
 const urls = [];
 const activeUrls = [];
-const snippets = {};
-const resources = {};
+// Keyed by names the sample can choose (lib is reachable from the sandbox), so no
+// prototype: "__proto__" must be an ordinary key.
+const snippets = Object.create(null);
+const resources = Object.create(null);
+const setVars = Object.create(null);
 const files = {};
 const IOC = [];
 const decode_strings = [];
 let latestUrl = "";
 
+// A sandbox String reaches the host as a vm2 proxy, which has no [[StringData]] slot for the
+// host's valueOf; the sandbox realm's own valueOf (see string-realms.js), called on the proxy,
+// checks the real slot (vm2 unwraps `this`), so neither an own valueOf nor a forged
+// toStringTag or prototype fools it, and a later patch of String.prototype.valueOf does not
+// reach it.
+const stringRealms = require("./string-realms");
+
+function errorText(e) {
+  try {
+    return String(e && e.message !== undefined ? e.message : e);
+  } catch (e2) {
+    return "unprintable error";
+  }
+}
+
+// Objects already found not to be String objects ([[StringData]] is fixed at creation), so
+// the map rewrites (snippets.json, resources.json) do not re-run the realm checks per entry.
+const notStringObjects = new WeakSet();
+
+// The primitive inside a String object (host or sandbox realm), or undefined.
+function stringObjectValue(value) {
+  if (!value || typeof value !== "object") return undefined;
+  if (notStringObjects.has(value)) return undefined;
+  // Only a TypeError means "no [[StringData]]"; anything else (a stack overflow the sample
+  // arranged) says nothing, and must not cache a real String object as not one.
+  let definite = true;
+  try {
+    return String.prototype.valueOf.call(value);
+  } catch (e) {
+    if (!(e instanceof TypeError)) definite = false;
+  }
+  for (const valueOf of stringRealms.list()) {
+    try {
+      // Reflect.apply: `valueOf.call` would go through the sandbox's Function.prototype.call,
+      // which the sample can patch.
+      const primitive = Reflect.apply(valueOf, value, []);
+      if (typeof primitive === "string") return primitive;
+    } catch (e) {
+      if (!(e instanceof TypeError)) definite = false;
+    }
+  }
+  if (definite) {
+    try {
+      notStringObjects.add(value);
+    } catch (e) {
+      // not weakly holdable
+    }
+  }
+  return undefined;
+}
+
+// A String object as its string, a BigInt as its decimal digits (JSON.stringify throws on
+// one); anything else unchanged.
+function normalizeValue(value) {
+  if (value && typeof value === "object") {
+    const unboxed = stringObjectValue(value);
+    if (unboxed !== undefined) return unboxed;
+  } else if (typeof value === "bigint") {
+    return value.toString();
+  }
+  return value;
+}
+
 function simpleStringify(object, a, b) {
+  object = normalizeValue(object);
   if (object && typeof object === "object") {
     const tmpObject = copyWithoutCircularReferences([object], object);
-    var newObject = [];
-    for (var i = 0; i < Object.keys(tmpObject).length; i++) {
-      newObject.push(tmpObject["" + i]);
-    }
-    object = newObject;
+    // Name-keyed maps (snippets.json, resources.json) stay maps and arrays stay arrays.
+    // Re-indexing every object by 0..n-1 wrote the maps as lists of nulls.
+    object = tmpObject;
   }
   return JSON.stringify(object, a, b);
 
+  function isDenseArray(value) {
+    if (!Array.isArray(value)) return false;
+    var keys = Object.keys(value);
+    if (keys.length !== value.length) return false;
+    for (var k = 0; k < keys.length; k++) {
+      if (keys[k] !== String(k)) return false;
+    }
+    return true;
+  }
+
   function copyWithoutCircularReferences(references, object) {
-    var cleanObject = {};
+    // Arrays stay arrays at every depth (an IOC's args, a RegWrite byte list), and a dropped
+    // function element, trailing or not, leaves a hole that serializes as null.
+    // Only a dense array (every index present, nothing else) is copied as an array; a sparse
+    // one, e.g. a[4294967294] from the sample, would otherwise be serialized as billions of
+    // nulls, and extra properties would be dropped, so those keep the index-keyed object form.
+    var asArray = isDenseArray(object);
+    // Plain {} copies: null-prototype ones cost more stack per level in JSON.stringify,
+    // which let shallower nesting make the IOC.json write throw. A "__proto__" key is
+    // defined, not assigned, so it stays an ordinary own key.
+    var cleanObject = asArray ? [] : {};
+    if (asArray) cleanObject.length = object.length;
+    function put(key, value) {
+      if (key === "__proto__") {
+        Object.defineProperty(cleanObject, key,
+          {value: value, enumerable: true, writable: true, configurable: true});
+      } else {
+        cleanObject[key] = value;
+      }
+    }
     Object.keys(object).forEach(function (key) {
       var value = object[key];
+      value = normalizeValue(value); // a String object (a URL), not a char map; a BigInt
       if (value && typeof value === "object") {
         if (references.indexOf(value) < 0) {
           references.push(value);
-          cleanObject[key] = copyWithoutCircularReferences(references, value);
+          put(key, copyWithoutCircularReferences(references, value));
           references.pop();
         } else {
-          cleanObject[key] = "###_Circular_###";
+          put(key, "###_Circular_###");
         }
       } else if (typeof value !== "function") {
-        cleanObject[key] = value;
+        put(key, value);
       }
     });
     return cleanObject;
   }
 }
 
+// box-js's own files in the results dir. A resource or snippet name can come from the sample
+// (lib is reachable from the sandbox), so it must be a plain file name and none of these.
+// Compared case-insensitively and without a trailing dot, which case-insensitive (macOS) and
+// Windows filesystems treat as the same file.
+const INDEX_FILES = new Set(["analysis.log", "ioc.json", "urls.json", "active_urls.json",
+  "snippets.json", "resources.json", "env_vars.json",
+  "harrington.json"]); // written into the results dir by tools/harrington-enrich.js
+// Windows device names, with or without an extension, are not files there.
+const DEVICE_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
+function safeResultName(name) {
+  name = String(name);
+  if (/^[0-9A-Za-z_-][0-9A-Za-z._-]{0,127}$/.test(name) && !name.endsWith(".") &&
+      !INDEX_FILES.has(name.toLowerCase()) && !DEVICE_NAME.test(name)) return name;
+  const renamed = uuid.v4();
+  log("warn", `Refused result file name ${JSON.stringify(name.slice(0, 200))}; using ${renamed}`);
+  return renamed;
+}
+
+// Template-interpolating a sample value runs its toString, which can throw.
+function printable(value) {
+  try {
+    return `${value}`;
+  } catch (e) {
+    return "<unprintable>";
+  }
+}
+
+// snippets.json and resources.json are written from each entry's JSON, taken when it is
+// recorded (as IOC.json is), so one entry that cannot be serialized (a sample-supplied path
+// with a throwing getter, very deep nesting) cannot stop later rewrites.
+const snippetSnapshots = Object.create(null);
+const resourceSnapshots = Object.create(null);
+
+function snapshotEntry(value) {
+  try {
+    const json = simpleStringify(value, null, "\t");
+    return json === undefined ? "null" : json;
+  } catch (e) {
+    return JSON.stringify(`<unserializable: ${errorText(e)}>`);
+  }
+}
+
+// The same layout simpleStringify(map, null, "\t") wrote.
+function writeIndexMap(name, entries) {
+  const keys = Object.keys(entries);
+  const body = keys.map((k) => "\t" + JSON.stringify(k) + ": " + entries[k].replace(/\n/g, "\n\t"));
+  fs.writeFileSync(path.join(directory, name), keys.length ? "{\n" + body.join(",\n") + "\n}" : "{}");
+}
+
 const logSnippet = function (filename, logContent, content) {
+  filename = safeResultName(filename);
   snippets[filename] = logContent;
+  snippetSnapshots[filename] = snapshotEntry(logContent);
   fs.writeFileSync(path.join(directory, filename), "" + content);
-  fs.writeFileSync(
-    path.join(directory, "snippets.json"),
-    simpleStringify(snippets, null, "\t")
-  );
+  writeIndexMap("snippets.json", snippetSnapshots);
 };
 
 // SECURITY FIX: Enhanced error handling with controlled termination
@@ -160,71 +302,90 @@ function hash(algo, string) {
 
 const getUUID = uuid.v4;
 
+// Each entry's JSON, taken when it is logged. IOC.json is written from these, so a value
+// that later turns unserializable (a getter that starts throwing) cannot stop later writes
+// or cost another entry its value, and a write no longer re-copies every entry.
+const IOCSnapshots = [];
+
+function snapshot(value) {
+  try {
+    return simpleStringify(value, null, "\t"); // undefined for undefined/function: key omitted
+  } catch (e) {
+    return JSON.stringify(`<unserializable: ${errorText(e)}>`);
+  }
+}
+
 function logIOC(type, value, description) {
   log("info", "IOC: " + description);
 
-  // Create a string representation of the value for comparison
-  const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-  
+  // The value comes from the sample and may not serialize (a BigInt, nesting deep enough to
+  // exhaust the stack, a throwing getter); its snapshot then holds a placeholder.
+  const valueJson = snapshot(value);
+  const isDecode = type === "decodeURIComponent" || type === "unescape" || type === "decodeURI";
+  // `out` as recorded in the snapshot: a live getter could return something else (or throw)
+  // on a second read, and the dedupe must match what IOC.json holds.
+  let out;
+  if (isDecode && valueJson !== undefined) {
+    try {
+      const recorded = JSON.parse(valueJson);
+      out = recorded && typeof recorded === "object" ? recorded.out : undefined;
+    } catch (e) {
+      out = undefined;
+    }
+  }
+
   // Check if this IOC already exists
-  const isDuplicate = IOC.some(ioc => {
+  const isDuplicate = IOC.some((ioc, i) => {
     // Match by type first
     if (ioc.type !== type) return false;
-    
-    // For decode strings, compare the output value
-    if (
-      (type === "decodeURIComponent" ||
-       type === "unescape" ||
-       type === "decodeURI") && 
-      ioc.value && 
-      ioc.value.out === value.out
-    ) {
+
+    // For decode strings, compare the output value (as read when each was logged)
+    if (isDecode && out !== undefined && IOCSnapshots[i].out === out) {
       return true;
     }
-    
-    // For other types, compare the full value
-    if (typeof ioc.value === 'object' && typeof value === 'object') {
-      // Compare objects by their string representation
-      const iocValueStr = JSON.stringify(ioc.value);
-      return iocValueStr === valueStr;
-    }
-    
-    // Simple value comparison
-    return ioc.value === value;
+
+    // For other types, compare what was recorded
+    return IOCSnapshots[i].valueJson === valueJson;
   });
-  
+
   // Only add if not a duplicate
   if (!isDuplicate) {
     // For specific decode types, also track in decode_strings
-    if (
-      type === "decodeURIComponent" ||
-      type === "unescape" ||
-      type === "decodeURI" &&
-      value && value.out
-    ) {
-      if (decode_strings.indexOf(value.out) === -1) {
-        decode_strings.push(value.out);
+    if (isDecode && out) {
+      if (decode_strings.indexOf(out) === -1) {
+        decode_strings.push(out);
       }
     }
-    
-    // Add to IOC collection
+
+    const fields = [["type", snapshot(type)], ["value", valueJson], ["description", snapshot(description)]]
+      .filter(([, json]) => json !== undefined)
+      .map(([key, json]) => "\t\"" + key + "\": " + json.replace(/\n/g, "\n\t"));
+    const entryJson = fields.length ? "{\n" + fields.join(",\n") + "\n}" : "{}";
+    // Push both together, after everything that can throw, so they stay index-aligned.
     IOC.push({ type, value, description });
-    
-    // Write to file
+    IOCSnapshots.push({ valueJson, entryJson, out });
+
+    // The same layout simpleStringify(IOC, null, "\t") wrote.
     fs.writeFileSync(
       path.join(directory, "IOC.json"),
-      simpleStringify(IOC, null, "\t")
+      "[\n" + IOCSnapshots.map((e) => "\t" + e.entryJson.replace(/\n/g, "\n\t")).join(",\n") + "\n]"
     );
   }
 }
 
 function logUrl(method, url) {
-  // Ensure url is a string and trim whitespace
-  const cleanUrl = typeof url === 'string' ? url.trim() : url;
-  
-  log("info", `${method} ${cleanUrl}`);
+  // A URL is a string or a String object (from any realm); anything else (a function, a
+  // getter) is logged but is not a URL: it is kept out of urls.json and latestUrl, which
+  // feeds active_urls.json and each resource's latestUrl.
+  let cleanUrl = typeof url === "string" ? url : stringObjectValue(url);
+  const isString = typeof cleanUrl === "string";
+  if (isString) cleanUrl = cleanUrl.trim();
+  else cleanUrl = url;
+
+  log("info", `${method} ${printable(cleanUrl)}`);
+  if (!isString) return;
   latestUrl = cleanUrl;
-  
+
   // Only add unique URLs to the list
   if (urls.indexOf(cleanUrl) === -1) urls.push(cleanUrl);
   
@@ -234,7 +395,6 @@ function logUrl(method, url) {
   );
 }
 
-const setVars = {};
 function logEnvVar(varName, varVal) {
     var dots = " <snipped>...";
     if (varVal.length < 200) dots = "";
@@ -482,6 +642,7 @@ module.exports = {
   logUrl,
   logEnvVar,
   logResource: function (resourceName, emulatedPath, content) {
+    resourceName = safeResultName(resourceName);
     // Writing a Blob?
     if (content && content.constructor && content.constructor.name == "Blob") {
       // Grab the actual contents as a byte string.
@@ -531,10 +692,12 @@ module.exports = {
     let filetype = "";
     if (doLog) {
       log("info", `Saved ${filePath} (${content.length} bytes)`);
+      // No shell: the name reaches here from the sandbox (lib.logResource), and JSON
+      // quoting does not stop $(...) or backticks.
       filetype = child_process
-        .execSync("file " + simpleStringify(filePath))
-        .toString("utf8");
-      filetype = filetype.replace(`${filePath}: `, "").replace("\n", "");
+        .execFileSync("file", ["-b", "--", filePath])
+        .toString("utf8")
+        .replace("\n", "");
       log("info", `${filePath} has been detected as ${filetype}.`);
     }
     if (fileWriteCount[filePath] == MAXWRITES + 1) {
@@ -568,11 +731,10 @@ module.exports = {
         sha256,
       };
       logIOC("NewResource", resource, "The script created a resource.");
-      fs.writeFileSync(
-        path.join(directory, "resources.json"),
-        simpleStringify(resources, null, "\t")
-      );
+      // Record before writing, or resources.json always lags one resource behind.
       resources[resourceName] = resource;
+      resourceSnapshots[resourceName] = snapshotEntry(resource);
+      writeIndexMap("resources.json", resourceSnapshots);
     }
   },
   logSnippet,

@@ -287,6 +287,24 @@ app.get("/sample/:id/urls", async (req, res) => {
     res.send(await p(fs.readFile)(file, "utf8"));
 });
 
+// resources.json and snippets.json are name-keyed maps. Analyses from before box-js wrote them
+// as maps hold a list instead: entry i kept only for a file named "i" (mostly nulls). Serve
+// those as a map of the non-null entries keyed by index, so every response matches the
+// documented schema and nothing recoverable is lost.
+function indexMap(text) {
+    try {
+	const parsed = JSON.parse(text);
+	if (!Array.isArray(parsed)) return text;
+	const map = {};
+	parsed.forEach((entry, i) => {
+	    if (entry !== null) map[String(i)] = entry;
+	});
+	return JSON.stringify(map, null, "\t");
+    } catch (e) {
+	return text;
+    }
+}
+
 /* GET /sample/:id/resources
  *
  * Arguments:
@@ -312,7 +330,7 @@ app.get("/sample/:id/resources", async (req, res) => {
 	return;
     }
 
-    res.send(await p(fs.readFile)(file, "utf8"));
+    res.send(indexMap(await p(fs.readFile)(file, "utf8")));
 });
 
 /* GET /sample/:id/snippets
@@ -336,11 +354,11 @@ app.get("/sample/:id/snippets", async (req, res) => {
 
     const file = path.join(outputFolder, "sample.js.results", "snippets.json");
     if (!await p(fs.exists)(file)) {
-	res.send("[]");
+	res.send("{}");
 	return;
     }
 
-    res.send(await p(fs.readFile)(file, "utf8"));
+    res.send(indexMap(await p(fs.readFile)(file, "utf8")));
 });
 
 /* GET /sample/:id/ioc

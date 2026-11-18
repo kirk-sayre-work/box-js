@@ -109,24 +109,22 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
+                type: object
+                description: Keyed by the file name in the results directory.
+                additionalProperties:
                   type: object
                   properties:
-                    <UUID>:
-                      type: object
-                      properties:
-                        path:
-                          type: string
-                          description: The path in the emulated environment
-                          example: 'C:\Windows\malware.exe'
-                        type:
-                          type: string
-                          description: 'The file type, as reported by `file`'
-                          example: 'PE32 executable (GUI) Intel 80386, for MS Windows'
-                        md5:
-                          type: string
-                          description: The MD5 hash of the resource
+                    path:
+                      type: string
+                      description: The path in the emulated environment
+                      example: 'C:\Windows\malware.exe'
+                    type:
+                      type: string
+                      description: 'The file type, as reported by `file`'
+                      example: 'PE32 executable (GUI) Intel 80386, for MS Windows'
+                    md5:
+                      type: string
+                      description: The MD5 hash of the resource
         '400':
           description: Invalid ID. The ID must be an UUID.
         '404':
@@ -152,17 +150,15 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
+                type: object
+                description: Keyed by the file name in the results directory.
+                additionalProperties:
                   type: object
                   properties:
-                    <UUID>:
-                      type: object
-                      properties:
-                        as:
-                          type: string
-                          description: The type of code (JS or shell command)
-                          example: eval'd JS
+                    as:
+                      type: string
+                      description: The type of code (JS or shell command)
+                      example: eval'd JS
         '400':
           description: Invalid ID. The ID must be an UUID.
         '404':

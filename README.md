@@ -34,10 +34,10 @@ Box.js will emulate a Windows JScript environment, print a summary of the emulat
 
  * `analysis.log`, a log of the analysis as it was printed on screen;
  * a series of files identified by UUIDs;
- * `snippets.json`, a list of pieces of code executed by the sample (JavaScript, shell commands, etc.);
+ * `snippets.json`, the pieces of code executed by the sample (JavaScript, shell commands, etc.), keyed by the UUID file each was saved as;
  * `urls.json`, a list of URLs contacted;
  * `active_urls.json`, a list of URLs that seem to drop active malware;
- * `resources.json`, the ADODB streams (i.e. the files that the script wrote to disk) with file types and hashes;
+ * `resources.json`, the ADODB streams (i.e. the files that the script wrote to disk) with file types and hashes, keyed by the UUID file each was saved as;
  * `IOC.json`, a list of behaviours identified as IOCs (Indicators of Compromise). These include registry accesses, written files, HTTP requests and so on.
 
  You can analyze these by yourself, or you can automatically submit them to Malwr, VirusTotal or a Cuckoo sandbox: for more information, run `box-export --help`.

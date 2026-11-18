@@ -247,7 +247,8 @@ if (argv["cuckoo-all-files"] || argv["cuckoo-executables"]
 		if (resourcesString === "") continue;
 		const resources = JSON.parse(resourcesString);
 		for (const filename in resources) {
-			if (!resources.hasOwnProperty(filename)) continue;
+			// Keys are resource names, which the sample can choose ("hasOwnProperty").
+			if (!Object.prototype.hasOwnProperty.call(resources, filename)) continue;
 			const resource = resources[filename];
 			// If the resource was already inserted, skip.
 			if (allFiles.some(file => file.sha256 === resource.sha256))

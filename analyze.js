@@ -1,4 +1,5 @@
 const lib = require("./lib");
+const registerStringRealm = require("./string-realms").claimRegistrar();
 const loop_rewriter = require("./loop_rewriter");
 const equality_rewriter = require("./equality_rewriter");
 const escodegen = require("escodegen");
@@ -2481,8 +2482,10 @@ const sandbox = {
       {
         get(target, name) {
           if (name === Symbol.toPrimitive) return () => target.href;
-          const docLocationGetValue = target[name];
-          lib.logUrl("document.location.get", docLocationGetValue);
+          // A read is not a fetch: logging it as a URL made "about:blank" or "localhost"
+          // the latest (and so the active) URL. Navigations are logged by set/assign/replace;
+          // reads (a geofence check, say) are still traced.
+          if (typeof name === "string") lib.verbose(`Script read document.location.${name}`);
           return target[name];
         },
         set(target, name, value) {
@@ -2788,6 +2791,8 @@ if (argv["dangerous-vm"]) {
     timeout: (argv.timeout || 10) * 1000,
     sandbox,
   });
+  // Captured before the sample runs; see string-realms.js.
+  registerStringRealm(vm.run('"".valueOf'));
 
   // Fake cscript.exe style ReferenceError messages.
   code =
@@ -2910,6 +2915,7 @@ if (argv["dangerous-vm"]) {
           timeout: (argv.timeout || 10) * 1000,
           sandbox,
         });
+        registerStringRealm(fallbackVm.run('"".valueOf'));
         fallbackVm.run(originalCode);
         lib.info("Fallback execution successful");
         return;
@@ -2949,6 +2955,7 @@ if (argv["dangerous-vm"]) {
           timeout: (argv.timeout || 10) * 1000,
           sandbox,
         });
+        registerStringRealm(fallbackVm.run('"".valueOf'));
 
         fallbackVm.run(originalCode);
         lib.info("Fallback execution successful");
