@@ -2492,6 +2492,335 @@ var _http = {
     },
 };
 
+// Emulated Node https module (require_override.js maps "https" here; an unusual name, since
+// a sample-level `const _https` would otherwise shadow it in the block they share). https used to reach
+// the real module, whose requests in a network-less worker fail asynchronously (EAI_AGAIN,
+// then "close"), so the code around a beacon kept running. This keeps that: each request
+// is logged with the URL node would contact and returns an emitter that fails the same
+// way. Defined at global scope, so a sample's own top-level names cannot shadow what it uses.
+var __boxjs_https = (function () {
+    const EventEmitter = require("events");
+    const str = (v) => (v === undefined || v === null) ? "" : String(v);
+    // Parsed by hand: the sandbox's URL is box-js's own emulation.
+    function parse(href) {
+	const m = /^([a-z][a-z0-9+.-]*:)\/\/(?:([^\/?#@]*)@)?(\[[^\]]*\]|[^\/?#:]*)(?::(\d*))?([^#]*)/i.exec(href);
+	return m ? {protocol: m[1].toLowerCase(), auth: m[2], hostname: m[3], port: m[4], path: m[5] || "/"} : null;
+    }
+    // node treats an object with href (and no path/auth of its own) as a URL; anything
+    // else, url.parse() output included, is an options object. boilerplate's own URL class
+    // keeps the address in .url.
+    function urlText(x) {
+	if (typeof x === "string") return x;
+	if (!x || typeof x !== "object") return null;
+	if (typeof x.href === "string" && x.path === undefined && x.auth === undefined) return x.href;
+	if (x.__name === "URL" && typeof x.url === "string") return x.url;
+	return null;
+    }
+    // The URL node would contact for request(a[, b]): b's options override a's.
+    function target(a, b) {
+	let o = {};
+	const t = urlText(a);
+	if (t !== null) {
+	    o = parse(t);
+	    if (!o) return t;
+	} else if (a && typeof a === "object") {
+	    b = a;
+	}
+	if (b && typeof b === "object" && b !== a || (b && typeof b === "object" && t === null)) {
+	    for (const k of ["protocol", "hostname", "host", "port", "path", "auth"]) {
+		if (b[k] !== undefined && b[k] !== null) o[k] = b[k];
+	    }
+	    if (o.path === undefined && (b.pathname !== undefined || b.search !== undefined)) {
+		o.path = str(b.pathname) + str(b.search);
+	    }
+	}
+	let host = str(o.hostname);
+	let port = str(o.port);
+	if (!host) {
+	    host = str(o.host);
+	    const hp = /^([^:\[\]]+):(\d+)$/.exec(host); // "name:port" in host
+	    if (hp) {
+		host = hp[1];
+		if (!port) port = hp[2];
+	    }
+	}
+	if (host.indexOf(":") >= 0 && host[0] !== "[") host = "[" + host + "]"; // IPv6
+	const protocol = str(o.protocol) || "https:";
+	const dflt = protocol === "http:" ? "80" : "443";
+	const auth = str(o.auth) ? str(o.auth) + "@" : "";
+	return protocol + "//" + auth + (host || "localhost") + (port && port !== dflt ? ":" + port : "") +
+	    (str(o.path) || "/");
+    }
+    function fakeRequest(method, a, b, callback) {
+	if (typeof b === "function") {
+	    callback = b;
+	    b = undefined;
+	}
+	const where = target(a, b);
+	logIOC("https." + method + "()", {url: where, options: (b && typeof b === "object") ? b : a},
+	       "The script made a web request with https." + method + "().");
+	lib.logUrl("https." + method + "()", where);
+	const req = new EventEmitter();
+	let failed = false;
+	let delivered = false;
+	const pendingCallbacks = [];
+	const error = () => {
+	    const err = new Error("getaddrinfo EAI_AGAIN " + where);
+	    err.code = "EAI_AGAIN";
+	    return err;
+	};
+	// Delivered when the failure has happened and someone listens: a listener attached
+	// after an await still gets it, as with a real lookup that fails later.
+	// Order as node: "error", "close", then write() callbacks with
+	// ERR_SOCKET_CLOSED_BEFORE_CONNECTION.
+	const flushCallbacks = () => {
+	    while (pendingCallbacks.length) {
+		const err = new Error("Socket closed before the connection was established");
+		err.code = "ERR_SOCKET_CLOSED_BEFORE_CONNECTION";
+		try { pendingCallbacks.shift()(err); } catch (e) {}
+	    }
+	};
+	const deliver = () => {
+	    if (!failed) return;
+	    if (!delivered && req.listenerCount("error") > 0) {
+		delivered = true;
+		req.emit("error", error());
+		req.emit("close");
+	    }
+	    // (Without an "error" listener node would crash the process; the callbacks still
+	    // run here, so the analysis sees what the sample does next.)
+	    flushCallbacks();
+	};
+	for (const m of ["on", "once", "addListener", "prependListener", "prependOnceListener"]) {
+	    const add = req[m];
+	    req[m] = function (name) {
+		const r = add.apply(req, arguments);
+		if (failed && (name === "error" || name === "close")) Promise.resolve().then(() => {
+		    if (name === "close" && delivered === false && req.listenerCount("error") === 0) {
+			delivered = true;
+			req.emit("close");
+		    } else deliver();
+		});
+		return r;
+	    };
+	}
+	// write(data[, encoding][, cb]): the callback gets the failure, as node calls it with
+	// an error when the socket never connected.
+	const withCallback = function () {
+	    const cb = Array.prototype.slice.call(arguments).reverse().find((x) => typeof x === "function");
+	    if (cb) {
+		pendingCallbacks.push(cb);
+		if (failed) Promise.resolve().then(deliver);
+	    }
+	    return req;
+	};
+	req.write = withCallback;
+	// end()'s callback waits for "finish", which a request that never connected does not
+	// emit.
+	req.end = function () { return req; };
+	for (const m of ["setTimeout", "setHeader", "removeHeader", "destroy", "abort", "setNoDelay",
+			 "setSocketKeepAlive", "flushHeaders", "cork", "uncork"]) {
+	    req[m] = function () { return req; };
+	}
+	req.getHeader = function () { return undefined; };
+	// The lookup fails on a later macrotask, as a real one does: a no-sleep retry loop
+	// must not starve timers and other async callbacks (__boxjs_defer is analyze.js's
+	// setImmediate; boilerplate's own setTimeout runs callbacks at once).
+	const later = typeof __boxjs_defer === "function" ? __boxjs_defer : (f) => Promise.resolve().then(f);
+	later(() => {
+	    failed = true;
+	    deliver();
+	    if (!delivered && req.listenerCount("close") > 0 && req.listenerCount("error") === 0) {
+		// Without an "error" listener node would throw; a "close" listener still ran first.
+		delivered = true;
+		req.emit("close");
+	    }
+	});
+	return req;
+    }
+    function Agent(options) {
+	this.options = options || {};
+	this.destroy = function () {};
+    }
+    return {
+	__name: "_https",
+	request: (a, b, cb) => fakeRequest("request", a, b, cb),
+	get: (a, b, cb) => fakeRequest("get", a, b, cb),
+	Agent: Agent,
+	globalAgent: new Agent(),
+    };
+})();
+
+// Emulated Node dns and timers modules (require_override.js). These, too, reached the
+// real modules before; in a network-less worker every lookup fails asynchronously.
+var __boxjs_dns = (function () {
+    const later = (f) => (typeof __boxjs_defer === "function" ? __boxjs_defer(f) : Promise.resolve().then(f));
+    function failure(fn, host, code) {
+	const err = new Error((fn === "lookup" ? "getaddrinfo " : "query" + fn.replace(/^resolve/, "") + " ") + code + " " + host);
+	err.code = code;
+	err.syscall = fn === "lookup" ? "getaddrinfo" : "query" + fn.replace(/^resolve/, "");
+	err.hostname = host;
+	return err;
+    }
+    const names = ["lookup", "lookupService", "resolve", "resolve4", "resolve6", "resolveAny", "resolveCaa",
+		   "resolveCname", "resolveMx", "resolveNaptr", "resolveNs", "resolvePtr", "resolveSoa",
+		   "resolveSrv", "resolveTxt", "reverse"];
+    const callbacks = {};
+    const promises = {};
+    // lookup() answers IP literals and localhost without a network, as the real one does.
+    function localAnswer(host, opts) {
+	host = String(host);
+	let addr = null, family = 0;
+	const v4 = (h) => /^\d{1,3}(\.\d{1,3}){3}$/.test(h) && h.split(".").every((o) => Number(o) <= 255);
+	const v6 = (h) => {
+	    let tail = h;
+	    const m = /^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(h); // ::ffff:1.2.3.4
+	    if (m) {
+		if (!v4(m[2])) return false;
+		tail = m[1] + "0:0";
+	    }
+	    if (!/^[0-9a-f:]+$/i.test(tail) || (tail.match(/::/g) || []).length > 1 || /:::/.test(tail)) return false;
+	    const groups = tail.split(":");
+	    const empties = tail.indexOf("::") >= 0;
+	    const filled = groups.filter((g) => g !== "").length;
+	    return groups.every((g) => g.length <= 4) && (empties ? filled <= 7 : groups.length === 8);
+	};
+	if (v4(host)) { addr = host; family = 4; }
+	else if (host.indexOf(":") >= 0 && v6(host)) { addr = host; family = 6; }
+	else if (/^localhost\.?$/i.test(host)) { addr = "127.0.0.1"; family = 4; }
+	if (!addr) return null;
+	const all = !!(opts && typeof opts === "object" && opts.all);
+	return {all, family, value: all ? [{address: addr, family}] : addr};
+    }
+    for (const fn of names) {
+	const code = fn === "lookup" || fn === "lookupService" ? "EAI_AGAIN" : "ECONNREFUSED";
+	const log = (host) => logIOC("dns." + fn + "()", {hostname: String(host)},
+				     "The script made a DNS query with dns." + fn + "().");
+	callbacks[fn] = function (host, opts) {
+	    log(host);
+	    const cb = Array.prototype.slice.call(arguments, 1).reverse().find((x) => typeof x === "function");
+	    const local = fn === "lookup" ? localAnswer(host, opts) : null;
+	    if (cb) later(() => local ? (local.all ? cb(null, local.value) : cb(null, local.value, local.family))
+				 : cb(failure(fn, host, code)));
+	};
+	promises[fn] = function (host, opts) {
+	    log(host);
+	    const local = fn === "lookup" ? localAnswer(host, opts) : null;
+	    return new Promise((resolve, reject) => later(() =>
+		local ? resolve(local.all ? local.value : {address: local.value, family: local.family})
+		    : reject(failure(fn, host, code))));
+	};
+    }
+    function Resolver() {
+	Object.assign(this, callbacks);
+	this.setServers = function () {};
+	this.getServers = function () { return []; };
+	this.cancel = function () {};
+    }
+    Object.assign(promises, {setServers: function () {}, getServers: function () { return []; },
+			     setDefaultResultOrder: function () {}, getDefaultResultOrder: function () { return "verbatim"; }});
+    promises.Resolver = function () {
+	Object.assign(this, promises);
+	this.setServers = function () {};
+	this.getServers = function () { return []; };
+	this.cancel = function () {};
+    };
+    return Object.assign({__name: "_dns", Resolver, promises,
+			  setServers: function () {}, getServers: function () { return []; },
+			  setDefaultResultOrder: function () {}, getDefaultResultOrder: function () { return "verbatim"; }},
+			 callbacks);
+})();
+var __boxjs_timers = (function () {
+    const later = (f) => (typeof __boxjs_defer === "function" ? __boxjs_defer(f) : Promise.resolve().then(f));
+    // A sleep resolves on the next macrotask without waiting; past this many, sleeps never
+    // resolve, so a polling loop stops instead of spinning (like boilerplate's own
+    // setTimeout loop guard). The cap is per analysis.
+    let sleeps = 0;
+    // A sleep advances the sandbox clock (patch.js's Date offset) by its length, as
+    // WScript.Sleep does, so a Date.now()-bounded wait loop reaches its deadline.
+    // dueAt(ms) when the timer is set, reach(due) when it fires: the clock only moves
+    // forward to the due time, so concurrent sleeps advance it by the longest, not the sum.
+    const dueAt = (ms) => {
+	ms = Number(ms);
+	return (ms > 0 && ms < 1e9) ? Date.now() + ms : 0;
+    };
+    const reach = (due) => {
+	if (due && typeof _globalTimeOffset === "number") {
+	    const behind = due - Date.now();
+	    if (behind > 0) _globalTimeOffset += behind;
+	}
+    };
+    const delay = (value, ms) => {
+	const due = dueAt(ms);
+	if (++sleeps > 10000) {
+	    if (sleeps === 10001) lib.warning("timers/promises: too many sleeps, stopping the loop");
+	    return new Promise(() => {});
+	}
+	// The clock moves when the sleep ends, not when it is requested.
+	return new Promise((resolve) => later(() => {
+	    reach(due);
+	    resolve(value);
+	}));
+    };
+    // The timers module's own timers are asynchronous (unlike boilerplate's global
+    // setTimeout, which runs the callback at once): the handle exists before the callback
+    // runs, and clearing it cancels the callback. The delay itself is not waited out, and an
+    // interval fires once.
+    const live = new Map(); // numeric id -> handle, so clearTimeout(+h) works
+    let nextId = 1;
+    // (No run cap: a beacon that reschedules itself forever runs until --timeout, as it
+    // did with the real module; a cap cut off loops that end on their own.)
+    function schedule(f, args, ms) {
+	const id = nextId++;
+	const handle = {
+	    _cleared: false,
+	    ref: function () { return handle; }, unref: function () { return handle; },
+	    hasRef: function () { return true; }, refresh: function () { return handle; },
+	    close: function () { handle._cleared = true; return handle; },
+	    [Symbol.toPrimitive]: function () { return id; },
+	};
+	live.set(id, handle);
+	if (typeof f !== "function") {
+	    live.delete(id);
+	    return handle;
+	}
+	const due = dueAt(ms);
+	later(() => {
+	    live.delete(id);
+	    if (handle._cleared) return;
+	    reach(due);
+	    f.apply(null, args);
+	});
+	return handle;
+    }
+    const clear = (h) => {
+	if (typeof h === "number" || typeof h === "string") h = live.get(Number(h));
+	if (h && typeof h === "object") h._cleared = true;
+    };
+    return {
+	setTimeout: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
+	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
+	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0); },
+	clearTimeout: clear, clearInterval: clear, clearImmediate: clear,
+	promises: {
+	    setTimeout: (ms, value) => delay(value, ms),
+	    setImmediate: (value) => delay(value),
+	    // for await (const v of setInterval(ms, v)): one value per (unwaited) interval.
+	    setInterval: function (ms, value) {
+		let stopped = false;
+		const it = {
+		    next: () => stopped ? Promise.resolve({value: undefined, done: true})
+			: delay(value, ms).then((v) => ({value: v, done: false})),
+		    return: () => { stopped = true; return Promise.resolve({value: undefined, done: true}); },
+		};
+		it[Symbol.asyncIterator] = () => it;
+		return it;
+	    },
+	    scheduler: {wait: () => delay(undefined), yield: () => delay(undefined)},
+	},
+    };
+})();
+
 // Stubbed Node socket.io-client function.
 function _io_client(url) {
     logIOC('socket.io-client()', {url: url}, "The script opened a socket with socket.io-client().");

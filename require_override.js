@@ -1,6 +1,8 @@
 // Use stubbed box-js packages in some cases. Stubbed packages are
 // defined in boilerplate.js.
 function require(arg) {
+    // "node:fs" is "fs": look the stub up without the prefix.
+    if (typeof arg === "string" && arg.startsWith("node:")) arg = arg.slice(5);
     
     // Override some Node packages with stubbed box-js versions. Add
     // any new stubbed packages here so they are loaded via require()
@@ -13,6 +15,13 @@ function require(arg) {
 	    exec: _execSync,
 	},
 	"http" : _http,
+	// https used to fall through to the real module; _https (boilerplate.js) emulates
+	// it as a network-less worker saw it.
+	"https" : __boxjs_https,
+	"dns" : __boxjs_dns,
+	"dns/promises" : __boxjs_dns.promises,
+	"timers" : __boxjs_timers,
+	"timers/promises" : __boxjs_timers.promises,
         "net" : {
             createConnection: _createConnection,
             Socket: _Socket,

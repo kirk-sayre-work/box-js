@@ -23,6 +23,8 @@ function bomEncoding(buf) {
 }
 const path = require("path");
 const { VM } = require("vm2");
+const { makeSandboxRequire, makeLibFacade, PRELUDE } = require("./sandbox-require");
+const ccOn = require("./cc_on");
 const child_process = require("child_process");
 const argv = require("./argv.js").run;
 const jsdom = require("jsdom").JSDOM;
@@ -41,6 +43,12 @@ const { DOMParser } = require("xmldom");
 const stripComments = require("strip-comments");
 
 const filename = process.argv[2];
+// Small Buffers are normally slices of a shared 8 KiB pool, and the sandbox can read a
+// Buffer's whole backing ArrayBuffer (buf.buffer), i.e. whatever else the host put in that
+// pool. Unpooled, each Buffer the sandbox sees backs only its own bytes.
+Buffer.poolSize = 0;
+// The one real file the emulated script may read back (its own source).
+require("./emulator/FakeFiles").allowRealRead(filename);
 
 // Just check the syntax of the JS sample and exit?
 // Do this early before any lib logging that requires output directory
@@ -86,12 +94,18 @@ lib.verbose("Box-js version: " + require("./package.json").version);
 
 let git_path = path.join(__dirname, ".git");
 if (fs.existsSync(git_path) && fs.lstatSync(git_path).isDirectory()) {
-  lib.verbose(
-    "Commit: " +
-      fs
-        .readFileSync(path.join(__dirname, ".git/refs/heads/master"), "utf8")
-        .replace(/\n/, "")
-  );
+  // Informational only. A checkout on another branch, a detached HEAD (CI) or packed refs
+  // has no .git/refs/heads/master, and that used to abort every analysis.
+  try {
+    lib.verbose(
+      "Commit: " +
+        fs
+          .readFileSync(path.join(__dirname, ".git/refs/heads/master"), "utf8")
+          .replace(/\n/, "")
+    );
+  } catch (e) {
+    lib.verbose("Commit: unknown (no .git/refs/heads/master)");
+  }
 } else {
   lib.verbose("No git folder found.");
 }
@@ -147,12 +161,6 @@ if (argv["activex-as-ioc"]) {
   }
 */
 
-function lacksBinary(name) {
-  const path = child_process.spawnSync("command", ["-v", name], {
-    shell: true,
-  }).stdout;
-  return path.length === 0;
-}
 
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
@@ -896,43 +904,15 @@ function rewrite(code, useException=false) {
                 .replace(/\/\*@cc_on/gi, "")
                 .replace(/@cc_on/gi, "")
                 .replace(/\/\*@/g, "\n").replace(/@\*\//g, "\n");
-            // "@if" processing requires m4 and cc, but don't require them otherwise
-            if (/@if/.test(code)) {
-                /*
-                  "@if (cond) source" becomes "\n _boxjs_if(cond)" with JS
-                  "\n _boxjs_if(cond)" becomes "\n #if (cond) \n source" with m4
-                  "\n #if (cond) \n source" becomes "source" with the C preprocessor
-                */
-                code = code
-                    .replace(/@if\s*/gi, "\n_boxjs_if")
-                    .replace(/@elif\s*/gi, "\n_boxjs_elif")
-                    .replace(/@else/gi, "\n#else\n")
-                    .replace(/@end/gi, "\n#endif\n")
-                    .replace(/@/g, "_boxjs_at");
-                // Require m4, cc
-                if (lacksBinary("cc")) lib.kill("You must install a C compiler (executable 'cc' not found).");
-                if (lacksBinary("m4")) lib.kill("You must install m4.");
-                code = `
-define(\`_boxjs_if', #if ($1)\n)
-define(\`_boxjs_elif', #elif ($1)\n)
-` + code;
-                lib.info("    Replacing @cc_on statements (use --no-cc_on-rewrite to skip)...", false);
-                const outputM4 = child_process.spawnSync("m4", [], {
-                    input: code
-                });
-                const outputCc = child_process.spawnSync("cc", [
-                    "-E", "-P", // preprocess, don't compile
-                    "-xc", // read from stdin, lang: c
-                    "-D_boxjs_at_x86=1", "-D_boxjs_at_win16=0", "-D_boxjs_at_win32=1", "-D_boxjs_at_win64=1", // emulate Windows 32 bit
-                    "-D_boxjs_at_jscript=1",
-                    "-o-", // print to stdout
-                    "-", // read from stdin
-                ], {
-                    input: outputM4.stdout.toString("utf8"),
-                });
-                code = outputCc.stdout.toString("utf8");
+            // Evaluated in JS (cc_on.js); this used to run m4 and cpp on the sample.
+            // Always, once @cc_on is seen: @_jscript_version etc. in plain code are
+            // substituted too. A failure keeps the source rather than analysing nothing.
+            lib.info("    Replacing @cc_on statements (use --no-cc_on-rewrite to skip)...", false);
+            try {
+                code = ccOn.preprocess(code, (msg) => lib.warning(msg));
+            } catch (e) {
+                lib.warning(`Conditional compilation failed (${e.message}); analysing the source without it`);
             }
-            code = code.replace(/_boxjs_at/g, "@");
         } else {
             lib.warn(
                 `The code appears to contain conditional compilation statements.
@@ -1549,9 +1529,18 @@ var wscript_proxy = new Proxy(
   }
 );
 
+// The sandbox never gets the host's require, lib or any host module object: in-sandbox
+// code shares one scope with the sample, so whatever it can reach the sample can too.
+// See sandbox-require.js.
+const sandboxLib = makeLibFacade(lib);
+const sandboxModules = makeSandboxRequire(lib, argv);
+// Path of the last atob() output saved to the results dir (see atob and the <a download>
+// click handler). Host-side: it used to be a sandbox property the sample could repoint.
+let lastDecodedFile;
+
 const sandbox = {
-  // Inject lib for sandbox functions to use
-  lib: lib,
+  // Logging/emulation helpers for in-sandbox code (a frozen facade, not lib itself).
+  lib: sandboxLib,
   // Proxy for Components.classes - created here in host context because
   // vm2 >=3.10.4 disables Proxy inside the sandbox to prevent escape via
   // handler leakage. Boilerplate.js references this as __componentClassesProxy.
@@ -1645,6 +1634,17 @@ const sandbox = {
     // TODO: If Blob need to extract the data.
     lib.writeFile(fname, data);
   },
+  // A later macrotask for boilerplate.js's emulated https failures (its setTimeout is
+  // synchronous). The callback is the sandbox's own function.
+  __boxjs_defer: function (fn) {
+    if (typeof fn === "function") setImmediate(() => {
+      try {
+        fn();
+      } catch (e) {
+        lib.verbose("deferred callback error: " + e.message);
+      }
+    });
+  },
   setInterval: function (func, time) {
     // For malware analysis, we want to execute the callback
     // but need to handle cases where the callback references the interval ID
@@ -1664,7 +1664,9 @@ const sandbox = {
         }
       } else if (typeof func === "string") {
         try {
-          eval(func);
+          // The sandbox's eval, never this file's: a host eval() here ran the
+          // sample's string in the worker's own realm (process, require, fs).
+          sandbox.eval(lib.logJS(func));
         } catch (e) {
           capturedLib.verbose("setInterval string callback error: " + e.message);
         }
@@ -1715,11 +1717,12 @@ const sandbox = {
   clearTimeout: function (id) {
     lib.verbose("clearTimeout called with id: " + id);
   },
-  logJS: lib.logJS,
-  logIOC: lib.logIOC,
-  logUrl: lib.logUrl,
+  logJS: sandboxLib.logJS,
+  logIOC: sandboxLib.logIOC,
+  logUrl: sandboxLib.logUrl,
   ActiveXObject,
-  dom,
+  // No `dom`: the JSDOM instance's window carries the host realm's eval, so
+  // dom.window.eval("process") was the host process.
   window: {
     addEventListener: function (event, callback, useCapture) {
       lib.verbose(`window.addEventListener('${event}') called`);
@@ -1849,7 +1852,8 @@ const sandbox = {
   },
   Enumerator: require("./emulator/Enumerator"),
   GetObject: require("./emulator/WMI").GetObject,
-  JSON,
+  // No JSON here: the sandbox's own intrinsic is used. Passing the host's let a sample
+  // replace JSON.stringify, which lib.js writes every results file with.
   location: new Proxy(
     {
       href: "about:blank",
@@ -1960,7 +1964,7 @@ const sandbox = {
     return out;
   },
   self: {},
-  require,
+  require: sandboxModules.require,
   atob: function (str) {
     try {
       // Make sure we have a valid string and handle all edge cases
@@ -1989,6 +1993,7 @@ const sandbox = {
         // Create a SHA256 hash of the content for the filename
         const hash = crypto.createHash("sha256").update(buffer).digest("hex");
         const filename = `${hash}.bin`;
+        lib.reserveResultName(filename);
 
         // Get the results directory directly from process.argv[3]
         // This is the actual .results directory that box-js creates
@@ -2007,8 +2012,8 @@ const sandbox = {
 
         // Store the absolute filepath in the sandbox itself as a property
         // This makes it accessible to the click handler
-        sandbox.lastDecodedFile = filepath;
-        global.lastDecodedFile = filepath; // Also store in global for redundancy
+        // Host-side only: the click handler reads this path, so the sample must not set it.
+        lastDecodedFile = filepath;
 
         // For display in logs
         const decoded = buffer.toString("binary");
@@ -2208,32 +2213,14 @@ const sandbox = {
             // This is the actual .results directory that box-js creates
             const outputDir = process.argv[3] || "./";
 
-            // Try to use the last decoded content from atob if available
-            if (
-              sandbox.lastDecodedFile &&
-              typeof sandbox.lastDecodedFile === "string"
-            ) {
+            // The last atob() output box-js itself saved (host-side, not sample-settable).
+            if (typeof lastDecodedFile === "string") {
               try {
-                lib.verbose(
-                  `Using lastDecodedFile: ${sandbox.lastDecodedFile}`
-                );
-                fileData = fs.readFileSync(sandbox.lastDecodedFile);
+                lib.verbose(`Using lastDecodedFile: ${lastDecodedFile}`);
+                fileData = fs.readFileSync(lastDecodedFile);
                 contentToSave = fileData;
               } catch (e) {
                 lib.error(`Error reading lastDecodedFile: ${e.message}`);
-              }
-            } else if (
-              global.lastDecodedFile &&
-              typeof global.lastDecodedFile === "string"
-            ) {
-              try {
-                lib.verbose(
-                  `Using global.lastDecodedFile: ${global.lastDecodedFile}`
-                );
-                fileData = fs.readFileSync(global.lastDecodedFile);
-                contentToSave = fileData;
-              } catch (e) {
-                lib.error(`Error reading global.lastDecodedFile: ${e.message}`);
               }
             }
 
@@ -2250,12 +2237,16 @@ const sandbox = {
                 .digest("hex");
 
               // Use the specified download filename but add extension if missing
-              let downloadFilename = this.download || "download.bin";
+              // A plain file name: `download` comes from the sample ("../../x" or an
+              // absolute path would otherwise land outside the results dir).
+              let downloadFilename = String(this.download || "download.bin")
+                .replace(/[^0-9A-Za-z._-]/g, "_").replace(/^\.+/, "_").slice(0, 128);
 
               // Save the file to the output directory with the download name
               const filepath = path.resolve(
                 path.join(outputDir, `${hash}_${downloadFilename}`)
               );
+              lib.reserveResultName(path.basename(filepath));
 
               // Ensure file gets written
               try {
@@ -2329,7 +2320,8 @@ const sandbox = {
                       callback.length > 100 ? "..." : ""
                     }`
                   );
-                  eval(callback);
+                  // Sandbox eval, not the host's (see setInterval).
+                  sandbox.eval(lib.logJS(callback));
                 }
               }, 100);
             } catch (e) {
@@ -2793,6 +2785,8 @@ if (argv["dangerous-vm"]) {
   });
   // Captured before the sample runs; see string-realms.js.
   registerStringRealm(vm.run('"".valueOf'));
+  // events and util.inherits are built in the sandbox's realm; see sandbox-require.js.
+  sandboxModules.installPrelude(vm.run(PRELUDE));
 
   // Fake cscript.exe style ReferenceError messages.
   code =
@@ -2916,6 +2910,7 @@ if (argv["dangerous-vm"]) {
           sandbox,
         });
         registerStringRealm(fallbackVm.run('"".valueOf'));
+        sandboxModules.installPrelude(fallbackVm.run(PRELUDE));
         fallbackVm.run(originalCode);
         lib.info("Fallback execution successful");
         return;
@@ -2956,6 +2951,7 @@ if (argv["dangerous-vm"]) {
           sandbox,
         });
         registerStringRealm(fallbackVm.run('"".valueOf'));
+        sandboxModules.installPrelude(fallbackVm.run(PRELUDE));
 
         fallbackVm.run(originalCode);
         lib.info("Fallback execution successful");
