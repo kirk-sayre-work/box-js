@@ -159,7 +159,7 @@ function VirtualSWBEMServices() {
             ExecMethod_ : function(action, obj) {
                 if (action === "Create") {
                     if (obj.CommandLine) {
-                        lib.logIOC('process ExecMethod_()', {cmd: "" + obj.CommandLine}, "The script spawned a process with WBEMScripting.SWBEMServices.ExecMethod_().");
+                        lib.logIOC('Run', {command: "" + obj.CommandLine}, "The script ran a command with WBEMScripting.SWBEMServices.ExecMethod_().");
                     }
                 }
             },
