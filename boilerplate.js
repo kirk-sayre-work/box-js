@@ -1909,13 +1909,14 @@ function setTimeout(func, time) {
 	}
 	return callback;
 };
-function clearTimeout() {};
+// Clearing a require("timers") handle with the global functions works, as in node.
+function clearTimeout(h) { if (__boxjs_timers._isHandle(h)) __boxjs_timers.clearTimeout(h); };
 function setInterval(func, val) {
     if (typeof(func) === "function") {
         func();
     };
 };
-function clearInterval() {};
+function clearInterval(h) { if (__boxjs_timers._isHandle(h)) __boxjs_timers.clearInterval(h); };
 
 // Some JS checks to see if these are defined. Do very basic stubbing
 // until better stubbing is needed.
@@ -2756,21 +2757,109 @@ var __boxjs_timers = (function () {
 	    if (sleeps === 10001) lib.warning("timers/promises: too many sleeps, stopping the loop");
 	    return new Promise(() => {});
 	}
-	// The clock moves when the sleep ends, not when it is requested.
-	return new Promise((resolve) => later(() => {
-	    reach(due);
-	    resolve(value);
-	}));
+	// On the same due-time queue as the timers below, so a sleep and a timer resume in
+	// the order of their due times (the clock moves when the sleep ends).
+	return new Promise((resolve) => {
+	    ms = Number(ms);
+	    if (!(ms >= 1) || ms > 2147483647) ms = 1;
+	    enqueue({id: 0, handle: {_cleared: false}, f: () => resolve(value), args: [], due: Date.now() + ms,
+		     period: 0, ticks: 0, sleep: true});
+	});
     };
-    // The timers module's own timers are asynchronous (unlike boilerplate's global
-    // setTimeout, which runs the callback at once): the handle exists before the callback
-    // runs, and clearing it cancels the callback. The delay itself is not waited out, and an
-    // interval fires once.
+    // The timers module's own timers run on a virtual clock: one queue ordered by due time,
+    // drained one timer per host macrotask, each moving the sandbox clock to its due time.
+    // So a 10 s deadline fires after the 1 s poll's 9th tick, not before its 2nd, and the
+    // handle exists before the callback runs (this = the handle, as in node). Bounds keep
+    // beacons from flooding the results: an interval fires at most MAX_TICKS times, and
+    // all timers together at most MAX_FIRES times per analysis.
     const live = new Map(); // numeric id -> handle, so clearTimeout(+h) works
+    const handles = new WeakSet(); // this module's handles (for the global clear* stubs)
     let nextId = 1;
-    // (No run cap: a beacon that reschedules itself forever runs until --timeout, as it
-    // did with the real module; a cap cut off loops that end on their own.)
-    function schedule(f, args, ms) {
+    const MAX_TICKS = 100;
+    const MAX_FIRES = 2000;
+    let fires = 0;
+    let seq = 0;
+    // A binary min-heap by (due, seq): inserting many timers stays O(log n) each.
+    const queue = [];
+    const before = (a, b) => a.due < b.due || (a.due === b.due && a.seq < b.seq);
+    const heapPush = (t) => {
+	queue.push(t);
+	let k = queue.length - 1;
+	while (k > 0) {
+	    const p = (k - 1) >> 1;
+	    if (!before(queue[k], queue[p])) break;
+	    [queue[k], queue[p]] = [queue[p], queue[k]];
+	    k = p;
+	}
+    };
+    const heapPop = () => {
+	if (queue.length === 0) return undefined;
+	const top = queue[0];
+	const last = queue.pop();
+	if (queue.length > 0) {
+	    queue[0] = last;
+	    let k = 0;
+	    for (;;) {
+		const l = 2 * k + 1, r = l + 1;
+		let m = k;
+		if (l < queue.length && before(queue[l], queue[m])) m = l;
+		if (r < queue.length && before(queue[r], queue[m])) m = r;
+		if (m === k) break;
+		[queue[k], queue[m]] = [queue[m], queue[k]];
+		k = m;
+	    }
+	}
+	return top;
+    };
+    let pumping = false;
+    const pump = () => {
+	if (pumping || queue.length === 0) return;
+	pumping = true;
+	// When idle: async work already pending (requests failing, promises settling) runs
+	// before virtual time jumps to the next timer.
+	if (typeof __boxjs_defer === "function") __boxjs_defer(step, true);
+	else later(step);
+    };
+    function step() {
+	pumping = false;
+	const t = heapPop();
+	if (!t) return;
+	if (t.handle._cleared || (!t.sleep && fires >= MAX_FIRES)) {
+	    live.delete(t.id);
+	    if (fires === MAX_FIRES && !t.handle._cleared) {
+		fires++;
+		lib.warning("timers: too many timer callbacks, stopping them");
+	    }
+	    pump();
+	    return;
+	}
+	if (t.due && typeof _globalTimeOffset === "number") {
+	    const behind = t.due - Date.now();
+	    if (behind > 0) _globalTimeOffset += behind;
+	}
+	if (!t.sleep) fires++;
+	t.ticks++;
+	const again = t.period > 0 && t.ticks < MAX_TICKS;
+	if (!again) live.delete(t.id);
+	try {
+	    t.f.apply(t.handle, t.args);
+	} catch (e) {
+	    lib.verbose("timer callback error: " + (e && e.message));
+	}
+	if (again && !t.handle._cleared) {
+	    t.due += t.period;
+	    enqueue(t);
+	} else {
+	    live.delete(t.id); // (an interval that cleared itself)
+	}
+	pump();
+    }
+    function enqueue(t) {
+	t.seq = ++seq;
+	heapPush(t);
+	pump();
+    }
+    function schedule(f, args, ms, period) {
 	const id = nextId++;
 	const handle = {
 	    _cleared: false,
@@ -2779,18 +2868,12 @@ var __boxjs_timers = (function () {
 	    close: function () { handle._cleared = true; return handle; },
 	    [Symbol.toPrimitive]: function () { return id; },
 	};
+	handles.add(handle);
+	if (typeof f !== "function") return handle;
+	ms = Number(ms);
+	if (!(ms >= 1) || ms > 2147483647) ms = 1; // as node: out-of-range delays are 1 ms
 	live.set(id, handle);
-	if (typeof f !== "function") {
-	    live.delete(id);
-	    return handle;
-	}
-	const due = dueAt(ms);
-	later(() => {
-	    live.delete(id);
-	    if (handle._cleared) return;
-	    reach(due);
-	    f.apply(null, args);
-	});
+	enqueue({id, handle, f, args, due: Date.now() + ms, period: period ? ms : 0, ticks: 0});
 	return handle;
     }
     const clear = (h) => {
@@ -2798,10 +2881,12 @@ var __boxjs_timers = (function () {
 	if (h && typeof h === "object") h._cleared = true;
     };
     return {
-	setTimeout: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
-	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
-	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0); },
+	setTimeout: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms, false); },
+	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms, true); },
+	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0, false); },
 	clearTimeout: clear, clearInterval: clear, clearImmediate: clear,
+	_isHandle: (h) => (!!h && typeof h === "object" && handles.has(h)) ||
+	    ((typeof h === "number" || typeof h === "string") && live.has(Number(h))),
 	promises: {
 	    setTimeout: (ms, value) => delay(value, ms),
 	    setImmediate: (value) => delay(value),
