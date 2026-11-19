@@ -45,6 +45,12 @@ describe("require_override stubs", function() {
 			"(async function () { var n = 0; for await (const _ of require(\"timers/promises\").setInterval(1000)) { if (++n >= 2) break; } require(\"child_process\").execSync(\"interval done\"); })();",
 			"var ticks = 0; var iv = require(\"timers\").setInterval(function () { if (++ticks > 3) require(\"child_process\").execSync(\"ran after clear\"); if (ticks === 3) { clearInterval(this); require(\"child_process\").execSync(\"third tick\"); } }, 1000);",
 			"require(\"timers\").setTimeout(function () { require(\"child_process\").execSync(\"deadline after \" + ticks); }, 10000);",
+			// A timer due before a pending sleep runs first.
+			"var key = null; require(\"timers\").setTimeout(function () { key = \"k1\"; }, 1000);",
+			"(async function () { await require(\"timers/promises\").setTimeout(5000); require(\"child_process\").execSync(\"key \" + key); })();",
+			// A never-cleared interval stops at its tick cap; virtual time reaches a 10-minute timer.
+			"var beats = 0, t0 = Date.now(); require(\"timers\").setInterval(function () { beats++; }, 1000);",
+			"require(\"timers\").setTimeout(function () { require(\"child_process\").execSync(\"beats \" + beats + \" waited \" + (Date.now() - t0 >= 600000)); }, 600000);",
 			"var agent = new (require(\"https\").Agent)({rejectUnauthorized: false});",
 			"var g = require(\"https\").get(new URL(\"https://get.example/g?x=1\"), function () {}); g.on(\"error\", function () {}); g.setTimeout(5000, function () { g.destroy(); });",
 			"require(\"https\").request(\"https://decoy.example/\", {hostname: \"real.example\", path: \"/c2\", agent: agent}, function () {}).end();",
@@ -83,7 +89,7 @@ describe("require_override stubs", function() {
 		}
 	});
 	it("emulates dns failing and timers/promises sleeping", function() {
-		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3"]) {
+		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3", "key k1", "beats 20 waited true"]) {
 			assert(iocs.some((i) => i.value && i.value.command === c), c);
 		}
 	});

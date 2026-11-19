@@ -1659,7 +1659,8 @@ const sandbox = {
       return;
     }
     let waits = 0;
-    const whenIdle = () => (deferPending > 0 && ++waits < 10000) ? setImmediate(whenIdle) : call();
+    // Bounded: continuous request or sleep work must not hold a timer back for long.
+    const whenIdle = () => (deferPending > 0 && ++waits < 50) ? setImmediate(whenIdle) : call();
     setImmediate(whenIdle);
   },
   setInterval: function (func, time) {

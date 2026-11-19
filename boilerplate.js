@@ -1910,13 +1910,13 @@ function setTimeout(func, time) {
 	return callback;
 };
 // Clearing a require("timers") handle with the global functions works, as in node.
-function clearTimeout(h) { if (h && h._boxjs_timer) __boxjs_timers.clearTimeout(h); };
+function clearTimeout(h) { if (__boxjs_timers._isHandle(h)) __boxjs_timers.clearTimeout(h); };
 function setInterval(func, val) {
     if (typeof(func) === "function") {
         func();
     };
 };
-function clearInterval(h) { if (h && h._boxjs_timer) __boxjs_timers.clearInterval(h); };
+function clearInterval(h) { if (__boxjs_timers._isHandle(h)) __boxjs_timers.clearInterval(h); };
 
 // Some JS checks to see if these are defined. Do very basic stubbing
 // until better stubbing is needed.
@@ -2757,11 +2757,14 @@ var __boxjs_timers = (function () {
 	    if (sleeps === 10001) lib.warning("timers/promises: too many sleeps, stopping the loop");
 	    return new Promise(() => {});
 	}
-	// The clock moves when the sleep ends, not when it is requested.
-	return new Promise((resolve) => later(() => {
-	    reach(due);
-	    resolve(value);
-	}));
+	// On the same due-time queue as the timers below, so a sleep and a timer resume in
+	// the order of their due times (the clock moves when the sleep ends).
+	return new Promise((resolve) => {
+	    ms = Number(ms);
+	    if (!(ms >= 1) || ms > 2147483647) ms = 1;
+	    enqueue({id: 0, handle: {_cleared: false}, f: () => resolve(value), args: [], due: Date.now() + ms,
+		     period: 0, ticks: 0, sleep: true});
+	});
     };
     // The timers module's own timers run on a virtual clock: one queue ordered by due time,
     // drained one timer per host macrotask, each moving the sandbox clock to its due time.
@@ -2770,6 +2773,7 @@ var __boxjs_timers = (function () {
     // beacons from flooding the results: an interval fires at most MAX_TICKS times, and
     // all timers together at most MAX_FIRES times per analysis.
     const live = new Map(); // numeric id -> handle, so clearTimeout(+h) works
+    const handles = new WeakSet(); // this module's handles (for the global clear* stubs)
     let nextId = 1;
     const MAX_TICKS = 20;
     const MAX_FIRES = 2000;
@@ -2789,7 +2793,7 @@ var __boxjs_timers = (function () {
 	pumping = false;
 	const t = queue.shift();
 	if (!t) return;
-	if (t.handle._cleared || fires >= MAX_FIRES) {
+	if (t.handle._cleared || (!t.sleep && fires >= MAX_FIRES)) {
 	    live.delete(t.id);
 	    if (fires === MAX_FIRES && !t.handle._cleared) {
 		fires++;
@@ -2802,7 +2806,7 @@ var __boxjs_timers = (function () {
 	    const behind = t.due - Date.now();
 	    if (behind > 0) _globalTimeOffset += behind;
 	}
-	fires++;
+	if (!t.sleep) fires++;
 	t.ticks++;
 	const again = t.period > 0 && t.ticks < MAX_TICKS;
 	if (!again) live.delete(t.id);
@@ -2828,12 +2832,12 @@ var __boxjs_timers = (function () {
 	const id = nextId++;
 	const handle = {
 	    _cleared: false,
-	    _boxjs_timer: true,
 	    ref: function () { return handle; }, unref: function () { return handle; },
 	    hasRef: function () { return true; }, refresh: function () { return handle; },
 	    close: function () { handle._cleared = true; return handle; },
 	    [Symbol.toPrimitive]: function () { return id; },
 	};
+	handles.add(handle);
 	if (typeof f !== "function") return handle;
 	ms = Number(ms);
 	if (!(ms >= 1) || ms > 2147483647) ms = 1; // as node: out-of-range delays are 1 ms
@@ -2850,6 +2854,7 @@ var __boxjs_timers = (function () {
 	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms, true); },
 	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0, false); },
 	clearTimeout: clear, clearInterval: clear, clearImmediate: clear,
+	_isHandle: (h) => !!h && typeof h === "object" && handles.has(h),
 	promises: {
 	    setTimeout: (ms, value) => delay(value, ms),
 	    setImmediate: (value) => delay(value),
