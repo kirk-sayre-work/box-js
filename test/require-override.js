@@ -89,7 +89,7 @@ describe("require_override stubs", function() {
 		}
 	});
 	it("emulates dns failing and timers/promises sleeping", function() {
-		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3", "key k1", "beats 20 waited true"]) {
+		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3", "key k1", "beats 100 waited true"]) {
 			assert(iocs.some((i) => i.value && i.value.command === c), c);
 		}
 	});

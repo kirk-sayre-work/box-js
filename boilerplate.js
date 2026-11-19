@@ -2775,7 +2775,7 @@ var __boxjs_timers = (function () {
     const live = new Map(); // numeric id -> handle, so clearTimeout(+h) works
     const handles = new WeakSet(); // this module's handles (for the global clear* stubs)
     let nextId = 1;
-    const MAX_TICKS = 20;
+    const MAX_TICKS = 100;
     const MAX_FIRES = 2000;
     let fires = 0;
     let seq = 0;
@@ -2854,7 +2854,8 @@ var __boxjs_timers = (function () {
 	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms, true); },
 	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0, false); },
 	clearTimeout: clear, clearInterval: clear, clearImmediate: clear,
-	_isHandle: (h) => !!h && typeof h === "object" && handles.has(h),
+	_isHandle: (h) => (!!h && typeof h === "object" && handles.has(h)) ||
+	    ((typeof h === "number" || typeof h === "string") && live.has(Number(h))),
 	promises: {
 	    setTimeout: (ms, value) => delay(value, ms),
 	    setImmediate: (value) => delay(value),
