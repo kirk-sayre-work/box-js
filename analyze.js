@@ -1537,6 +1537,8 @@ const sandboxModules = makeSandboxRequire(lib, argv);
 // Path of the last atob() output saved to the results dir (see atob and the <a download>
 // click handler). Host-side: it used to be a sandbox property the sample could repoint.
 let lastDecodedFile;
+// Immediate callbacks queued by __boxjs_defer and not yet run (see there).
+let deferPending = 0;
 
 const sandbox = {
   // Logging/emulation helpers for in-sandbox code (a frozen facade, not lib itself).
@@ -1636,14 +1638,29 @@ const sandbox = {
   },
   // A later macrotask for boilerplate.js's emulated https failures (its setTimeout is
   // synchronous). The callback is the sandbox's own function.
-  __boxjs_defer: function (fn) {
-    if (typeof fn === "function") setImmediate(() => {
+  // With a second argument it is a "when idle" callback instead: it runs once no other
+  // deferred callback is pending, so emulated timers fire only after the async work that
+  // is already under way (failing requests, settling promises), as with real time.
+  __boxjs_defer: function (fn, idle) {
+    if (typeof fn !== "function") return;
+    const call = () => {
       try {
         fn();
       } catch (e) {
-        lib.verbose("deferred callback error: " + e.message);
+        lib.verbose("deferred callback error: " + (e && e.message));
       }
-    });
+    };
+    if (!idle) {
+      deferPending++;
+      setImmediate(() => {
+        deferPending--;
+        call();
+      });
+      return;
+    }
+    let waits = 0;
+    const whenIdle = () => (deferPending > 0 && ++waits < 10000) ? setImmediate(whenIdle) : call();
+    setImmediate(whenIdle);
   },
   setInterval: function (func, time) {
     // For malware analysis, we want to execute the callback

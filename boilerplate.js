@@ -1909,13 +1909,14 @@ function setTimeout(func, time) {
 	}
 	return callback;
 };
-function clearTimeout() {};
+// Clearing a require("timers") handle with the global functions works, as in node.
+function clearTimeout(h) { if (h && h._boxjs_timer) __boxjs_timers.clearTimeout(h); };
 function setInterval(func, val) {
     if (typeof(func) === "function") {
         func();
     };
 };
-function clearInterval() {};
+function clearInterval(h) { if (h && h._boxjs_timer) __boxjs_timers.clearInterval(h); };
 
 // Some JS checks to see if these are defined. Do very basic stubbing
 // until better stubbing is needed.
@@ -2762,49 +2763,82 @@ var __boxjs_timers = (function () {
 	    resolve(value);
 	}));
     };
-    // The timers module's own timers are asynchronous (unlike boilerplate's global
-    // setTimeout, which runs the callback at once): the handle exists before the callback
-    // runs, and clearing it cancels the callback. The delay itself is not waited out.
+    // The timers module's own timers run on a virtual clock: one queue ordered by due time,
+    // drained one timer per host macrotask, each moving the sandbox clock to its due time.
+    // So a 10 s deadline fires after the 1 s poll's 9th tick, not before its 2nd, and the
+    // handle exists before the callback runs (this = the handle, as in node). Bounds keep
+    // beacons from flooding the results: an interval fires at most MAX_TICKS times, and
+    // all timers together at most MAX_FIRES times per analysis.
     const live = new Map(); // numeric id -> handle, so clearTimeout(+h) works
     let nextId = 1;
-    // (No run cap: a beacon that reschedules itself forever runs until --timeout, as it
-    // did with the real module; a cap cut off loops that end on their own.)
-    // An interval fires every period (the clock moving by the period each time) until
-    // cleared, up to this many ticks, so a payload run on a later tick is still seen.
-    const MAX_TICKS = 1000;
-    function schedule(f, args, ms, repeat) {
+    const MAX_TICKS = 20;
+    const MAX_FIRES = 2000;
+    let fires = 0;
+    let seq = 0;
+    const queue = [];
+    let pumping = false;
+    const pump = () => {
+	if (pumping || queue.length === 0) return;
+	pumping = true;
+	// When idle: async work already pending (requests failing, promises settling) runs
+	// before virtual time jumps to the next timer.
+	if (typeof __boxjs_defer === "function") __boxjs_defer(step, true);
+	else later(step);
+    };
+    function step() {
+	pumping = false;
+	const t = queue.shift();
+	if (!t) return;
+	if (t.handle._cleared || fires >= MAX_FIRES) {
+	    live.delete(t.id);
+	    if (fires === MAX_FIRES && !t.handle._cleared) {
+		fires++;
+		lib.warning("timers: too many timer callbacks, stopping them");
+	    }
+	    pump();
+	    return;
+	}
+	if (t.due && typeof _globalTimeOffset === "number") {
+	    const behind = t.due - Date.now();
+	    if (behind > 0) _globalTimeOffset += behind;
+	}
+	fires++;
+	t.ticks++;
+	const again = t.period > 0 && t.ticks < MAX_TICKS;
+	if (!again) live.delete(t.id);
+	try {
+	    t.f.apply(t.handle, t.args);
+	} catch (e) {
+	    lib.verbose("timer callback error: " + (e && e.message));
+	}
+	if (again && !t.handle._cleared) {
+	    t.due += t.period;
+	    enqueue(t);
+	}
+	pump();
+    }
+    function enqueue(t) {
+	t.seq = ++seq;
+	let k = queue.length;
+	while (k > 0 && (queue[k - 1].due > t.due || (queue[k - 1].due === t.due && queue[k - 1].seq > t.seq))) k--;
+	queue.splice(k, 0, t);
+	pump();
+    }
+    function schedule(f, args, ms, period) {
 	const id = nextId++;
 	const handle = {
 	    _cleared: false,
+	    _boxjs_timer: true,
 	    ref: function () { return handle; }, unref: function () { return handle; },
 	    hasRef: function () { return true; }, refresh: function () { return handle; },
 	    close: function () { handle._cleared = true; return handle; },
 	    [Symbol.toPrimitive]: function () { return id; },
 	};
+	if (typeof f !== "function") return handle;
+	ms = Number(ms);
+	if (!(ms >= 1) || ms > 2147483647) ms = 1; // as node: out-of-range delays are 1 ms
 	live.set(id, handle);
-	if (typeof f !== "function") {
-	    live.delete(id);
-	    return handle;
-	}
-	let ticks = 0;
-	const tick = () => {
-	    const due = dueAt(ms);
-	    later(() => {
-		if (handle._cleared) {
-		    live.delete(id);
-		    return;
-		}
-		reach(due);
-		ticks++;
-		if (!repeat || ticks >= MAX_TICKS) live.delete(id);
-		try {
-		    f.apply(null, args);
-		} finally {
-		    if (repeat && ticks < MAX_TICKS && !handle._cleared) tick();
-		}
-	    });
-	};
-	tick();
+	enqueue({id, handle, f, args, due: Date.now() + ms, period: period ? ms : 0, ticks: 0});
 	return handle;
     }
     const clear = (h) => {
@@ -2812,13 +2846,9 @@ var __boxjs_timers = (function () {
 	if (h && typeof h === "object") h._cleared = true;
     };
     return {
-	setTimeout: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
-	setInterval: function (f, ms) {
-	    // node treats a missing or sub-1 period as 1 ms.
-	    const period = Number(ms) >= 1 ? Number(ms) : 1;
-	    return schedule(f, Array.prototype.slice.call(arguments, 2), period, true);
-	},
-	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0); },
+	setTimeout: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms, false); },
+	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms, true); },
+	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0, false); },
 	clearTimeout: clear, clearInterval: clear, clearImmediate: clear,
 	promises: {
 	    setTimeout: (ms, value) => delay(value, ms),

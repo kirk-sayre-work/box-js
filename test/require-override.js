@@ -43,7 +43,8 @@ describe("require_override stubs", function() {
 			"require(\"dns\").lookup(\"45.133.1.20\", function (err, a) { if (!err) require(\"child_process\").execSync(\"resolved \" + a); });",
 			"var w = require(\"timers\").setTimeout(function () {}, 15000); w.unref(); require(\"child_process\").execSync(\"after unref\");",
 			"(async function () { var n = 0; for await (const _ of require(\"timers/promises\").setInterval(1000)) { if (++n >= 2) break; } require(\"child_process\").execSync(\"interval done\"); })();",
-			"var ticks = 0; var iv = require(\"timers\").setInterval(function () { if (++ticks === 3) { require(\"timers\").clearInterval(iv); require(\"child_process\").execSync(\"third tick\"); } }, 60000);",
+			"var ticks = 0; var iv = require(\"timers\").setInterval(function () { if (++ticks > 3) require(\"child_process\").execSync(\"ran after clear\"); if (ticks === 3) { clearInterval(this); require(\"child_process\").execSync(\"third tick\"); } }, 1000);",
+			"require(\"timers\").setTimeout(function () { require(\"child_process\").execSync(\"deadline after \" + ticks); }, 10000);",
 			"var agent = new (require(\"https\").Agent)({rejectUnauthorized: false});",
 			"var g = require(\"https\").get(new URL(\"https://get.example/g?x=1\"), function () {}); g.on(\"error\", function () {}); g.setTimeout(5000, function () { g.destroy(); });",
 			"require(\"https\").request(\"https://decoy.example/\", {hostname: \"real.example\", path: \"/c2\", agent: agent}, function () {}).end();",
@@ -82,9 +83,12 @@ describe("require_override stubs", function() {
 		}
 	});
 	it("emulates dns failing and timers/promises sleeping", function() {
-		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick"]) {
+		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3"]) {
 			assert(iocs.some((i) => i.value && i.value.command === c), c);
 		}
+	});
+	it("stops an interval cleared through this", function() {
+		assert(!iocs.some((i) => i.value && i.value.command === "ran after clear"));
 	});
 	it("gives node:-prefixed ids the same stub", function() {
 		assert(iocs.some((i) => i.value && i.value.command === "whoami /all"), JSON.stringify(iocs.map((i) => i.type)));
