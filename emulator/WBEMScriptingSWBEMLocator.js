@@ -113,7 +113,7 @@ _fake_win32_computersystem = {
 function VirtualSWBEMServices() {
     this.instancesof = function(item) {
         lib.info(`SWBEMServices: emulating getting instances of ${item}`);
-	switch (item.toLowerCase()) {
+        switch (item.toLowerCase()) {
         case 'win32_operatingsystem': {
             return [_fake_win32_operatingsystem];
         };
@@ -134,23 +134,49 @@ function VirtualSWBEMServices() {
     };
     
     this.get = function(item) {
-        return {
+        var r = {
+            __name : "VirtualSWBEMServices.Get()",
             spawninstance_ : function() {
                 return {
                     add : function(item) {}
                 };
-            }
+            },
+            Methods_ : {
+                Item : function() {
+                    return {
+                        __name : "Methods_.Item()",
+                        InParameters : {
+                            __name : "Methods_.Item().InParameters",
+                            SpawnInstance_ : function() {
+                                return {
+                                    add : function(item) {}
+                                };
+                            },        
+                        },
+                    };
+                },
+            },
+            ExecMethod_ : function(action, obj) {
+                if (action === "Create") {
+                    if (obj.CommandLine) {
+                        lib.logIOC('process ExecMethod_()', {cmd: "" + obj.CommandLine}, "The script spawned a process with WBEMScripting.SWBEMServices.ExecMethod_().");
+                    }
+                }
+            },
         };
-    };
+        r.SpawnInstance_ = r.spawninstance_;
 
+        return r;
+    };
+    
     this.security_ = function(arg) {};
 }
 
 function VirtualWBEMLocator() {
     this.connectserver = function(server, namespace) {
-	lib.info(`WBEMLocator: emulating a connection to server ${server} with namespace ${namespace}`);
+        lib.info(`WBEMLocator: emulating a connection to server ${server} with namespace ${namespace}`);
         
-	return lib.proxify(VirtualSWBEMServices, "WBEMScripting.SWBEMServices");
+        return lib.proxify(VirtualSWBEMServices, "WBEMScripting.SWBEMServices");
     };
 }
 
