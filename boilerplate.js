@@ -2849,6 +2849,8 @@ var __boxjs_timers = (function () {
 	if (again && !t.handle._cleared) {
 	    t.due += t.period;
 	    enqueue(t);
+	} else {
+	    live.delete(t.id); // (an interval that cleared itself)
 	}
 	pump();
     }
