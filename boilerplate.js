@@ -2764,13 +2764,15 @@ var __boxjs_timers = (function () {
     };
     // The timers module's own timers are asynchronous (unlike boilerplate's global
     // setTimeout, which runs the callback at once): the handle exists before the callback
-    // runs, and clearing it cancels the callback. The delay itself is not waited out, and an
-    // interval fires once.
+    // runs, and clearing it cancels the callback. The delay itself is not waited out.
     const live = new Map(); // numeric id -> handle, so clearTimeout(+h) works
     let nextId = 1;
     // (No run cap: a beacon that reschedules itself forever runs until --timeout, as it
     // did with the real module; a cap cut off loops that end on their own.)
-    function schedule(f, args, ms) {
+    // An interval fires every period (the clock moving by the period each time) until
+    // cleared, up to this many ticks, so a payload run on a later tick is still seen.
+    const MAX_TICKS = 1000;
+    function schedule(f, args, ms, repeat) {
 	const id = nextId++;
 	const handle = {
 	    _cleared: false,
@@ -2784,13 +2786,25 @@ var __boxjs_timers = (function () {
 	    live.delete(id);
 	    return handle;
 	}
-	const due = dueAt(ms);
-	later(() => {
-	    live.delete(id);
-	    if (handle._cleared) return;
-	    reach(due);
-	    f.apply(null, args);
-	});
+	let ticks = 0;
+	const tick = () => {
+	    const due = dueAt(ms);
+	    later(() => {
+		if (handle._cleared) {
+		    live.delete(id);
+		    return;
+		}
+		reach(due);
+		ticks++;
+		if (!repeat || ticks >= MAX_TICKS) live.delete(id);
+		try {
+		    f.apply(null, args);
+		} finally {
+		    if (repeat && ticks < MAX_TICKS && !handle._cleared) tick();
+		}
+	    });
+	};
+	tick();
 	return handle;
     }
     const clear = (h) => {
@@ -2799,7 +2813,11 @@ var __boxjs_timers = (function () {
     };
     return {
 	setTimeout: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
-	setInterval: function (f, ms) { return schedule(f, Array.prototype.slice.call(arguments, 2), ms); },
+	setInterval: function (f, ms) {
+	    // node treats a missing or sub-1 period as 1 ms.
+	    const period = Number(ms) >= 1 ? Number(ms) : 1;
+	    return schedule(f, Array.prototype.slice.call(arguments, 2), period, true);
+	},
 	setImmediate: function (f) { return schedule(f, Array.prototype.slice.call(arguments, 1), 0); },
 	clearTimeout: clear, clearInterval: clear, clearImmediate: clear,
 	promises: {
