@@ -51,6 +51,9 @@ describe("require_override stubs", function() {
 			// A never-cleared interval stops at its tick cap; virtual time reaches a 10-minute timer.
 			"var beats = 0, t0 = Date.now(); require(\"timers\").setInterval(function () { beats++; }, 1000);",
 			"require(\"timers\").setTimeout(function () { require(\"child_process\").execSync(\"beats \" + beats + \" waited \" + (Date.now() - t0 >= 600000)); }, 600000);",
+			// A watchdog armed before a request sees it failed (the failure is already pending).
+			"var c2failed = false; require(\"timers\").setTimeout(function () { require(\"child_process\").execSync(c2failed ? \"watchdog saw failure\" : \"watchdog too early\"); }, 1000);",
+			"require(\"https\").get(\"https://wd.example/s\").on(\"error\", function () { c2failed = true; });",
 			"var agent = new (require(\"https\").Agent)({rejectUnauthorized: false});",
 			"var g = require(\"https\").get(new URL(\"https://get.example/g?x=1\"), function () {}); g.on(\"error\", function () {}); g.setTimeout(5000, function () { g.destroy(); });",
 			"require(\"https\").request(\"https://decoy.example/\", {hostname: \"real.example\", path: \"/c2\", agent: agent}, function () {}).end();",
@@ -72,7 +75,7 @@ describe("require_override stubs", function() {
 		assert.deepStrictEqual(urls, ["https://tls.example/a", "https://tls2.example:8443/b",
 			"https://c2.example/payload?a=1", "https://tls3.example/c?q", "https://beacon.example/c",
 			"https://hostopt.example:8443/p", "https://[::1]:8443/late", "https://close.example/",
-			"https://cb.example/", "https://dga.example/api", "https://get.example/g?x=1", "https://real.example/c2"]);
+			"https://cb.example/", "https://dga.example/api", "https://wd.example/s", "https://get.example/g?x=1", "https://real.example/c2"]);
 	});
 	it("keeps analysing after an https request", function() {
 		assert(iocs.some((i) => i.value && i.value.command === "after beacon"), JSON.stringify(iocs.map((i) => i.type)));
@@ -89,7 +92,7 @@ describe("require_override stubs", function() {
 		}
 	});
 	it("emulates dns failing and timers/promises sleeping", function() {
-		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3", "key k1", "beats 100 waited true"]) {
+		for (const c of ["dns fallback", "after sleep", "resolved 45.133.1.20", "after unref", "interval done", "third tick", "deadline after 3", "key k1", "beats 100 waited true", "watchdog saw failure"]) {
 			assert(iocs.some((i) => i.value && i.value.command === c), c);
 		}
 	});

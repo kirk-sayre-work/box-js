@@ -1537,8 +1537,9 @@ const sandboxModules = makeSandboxRequire(lib, argv);
 // Path of the last atob() output saved to the results dir (see atob and the <a download>
 // click handler). Host-side: it used to be a sandbox property the sample could repoint.
 let lastDecodedFile;
-// Immediate callbacks queued by __boxjs_defer and not yet run (see there).
-let deferPending = 0;
+// Immediate callbacks queued by __boxjs_defer, and those that have run (see there).
+let deferIssued = 0;
+let deferDone = 0;
 
 const sandbox = {
   // Logging/emulation helpers for in-sandbox code (a frozen facade, not lib itself).
@@ -1651,16 +1652,24 @@ const sandbox = {
       }
     };
     if (!idle) {
-      deferPending++;
+      deferIssued++;
       setImmediate(() => {
-        deferPending--;
+        deferDone++;
         call();
       });
       return;
     }
+    // Waits for the work issued before this point (at most 50 rounds), then a few more
+    // rounds while follow-up work keeps arriving (a request failing into the next one, as a
+    // mirror list does). Not longer: a reconnect loop never stops issuing requests.
+    const target = deferIssued;
     let waits = 0;
-    // Bounded: continuous request or sleep work must not hold a timer back for long.
-    const whenIdle = () => (deferPending > 0 && ++waits < 50) ? setImmediate(whenIdle) : call();
+    let grace = 0;
+    const whenIdle = () => {
+      if (deferDone < target && ++waits < 50) return setImmediate(whenIdle);
+      if (deferDone < deferIssued && ++grace < 8) return setImmediate(whenIdle);
+      call();
+    };
     setImmediate(whenIdle);
   },
   setInterval: function (func, time) {

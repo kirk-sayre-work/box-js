@@ -2779,7 +2779,38 @@ var __boxjs_timers = (function () {
     const MAX_FIRES = 2000;
     let fires = 0;
     let seq = 0;
+    // A binary min-heap by (due, seq): inserting many timers stays O(log n) each.
     const queue = [];
+    const before = (a, b) => a.due < b.due || (a.due === b.due && a.seq < b.seq);
+    const heapPush = (t) => {
+	queue.push(t);
+	let k = queue.length - 1;
+	while (k > 0) {
+	    const p = (k - 1) >> 1;
+	    if (!before(queue[k], queue[p])) break;
+	    [queue[k], queue[p]] = [queue[p], queue[k]];
+	    k = p;
+	}
+    };
+    const heapPop = () => {
+	if (queue.length === 0) return undefined;
+	const top = queue[0];
+	const last = queue.pop();
+	if (queue.length > 0) {
+	    queue[0] = last;
+	    let k = 0;
+	    for (;;) {
+		const l = 2 * k + 1, r = l + 1;
+		let m = k;
+		if (l < queue.length && before(queue[l], queue[m])) m = l;
+		if (r < queue.length && before(queue[r], queue[m])) m = r;
+		if (m === k) break;
+		[queue[k], queue[m]] = [queue[m], queue[k]];
+		k = m;
+	    }
+	}
+	return top;
+    };
     let pumping = false;
     const pump = () => {
 	if (pumping || queue.length === 0) return;
@@ -2791,7 +2822,7 @@ var __boxjs_timers = (function () {
     };
     function step() {
 	pumping = false;
-	const t = queue.shift();
+	const t = heapPop();
 	if (!t) return;
 	if (t.handle._cleared || (!t.sleep && fires >= MAX_FIRES)) {
 	    live.delete(t.id);
@@ -2823,9 +2854,7 @@ var __boxjs_timers = (function () {
     }
     function enqueue(t) {
 	t.seq = ++seq;
-	let k = queue.length;
-	while (k > 0 && (queue[k - 1].due > t.due || (queue[k - 1].due === t.due && queue[k - 1].seq > t.seq))) k--;
-	queue.splice(k, 0, t);
+	heapPush(t);
 	pump();
     }
     function schedule(f, args, ms, period) {
